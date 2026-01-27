@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'common_widgets.dart';
+import 'otp_verification.dart';
+import 'personal_details.dart';
+import 'driver_details.dart';
+import '../home/home_screen.dart';
+import '../../main.dart';
 
-enum UserRole { student, faculty }
+// ============================================================================
+// Auth Flow Screen - Main Entry Point
+// ============================================================================
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -10,29 +19,182 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  int _tabIndex = 1; // 0 = Log In, 1 = Sign Up (default like screenshot)
+  // Navigation states
+  AuthStep _currentStep = AuthStep.loginSignup;
+  bool _isSignUp = false; // false = Login, true = SignUp
 
-  // Sign up form state
-  UserRole _role = UserRole.student;
-  bool _agree = false;
-  bool _obscure = true;
+  // Phone number data
+  String _countryCode = '+91';
+  String _phoneNumber = '';
 
-  final _emailCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _emailCtrl.dispose();
-    _passCtrl.dispose();
-    super.dispose();
+  void _navigateToStep(AuthStep step) {
+    setState(() => _currentStep = step);
   }
 
-  static const Color kPrimary = Color(0xFF14B08A);
-  static const Color kMuted = Color(0xFF6B7280);
-  static const Color kCardBorder = Color(0xFFE6EAF0);
+  void _onPhoneSubmit(String phone, String countryCode, bool isSignUp) {
+    setState(() {
+      _phoneNumber = phone;
+      _countryCode = countryCode;
+      _isSignUp = isSignUp;
+      _currentStep = AuthStep.otp;
+    });
+  }
+
+  void _onOtpVerified() {
+    if (_isSignUp) {
+      _navigateToStep(AuthStep.personalDetails);
+    } else {
+      // Login complete - navigate to home
+      _onAuthComplete();
+    }
+  }
+
+  void _onPersonalDetailsComplete() {
+    _navigateToStep(AuthStep.driverDetails);
+  }
+
+  void _onAuthComplete() async {
+    // Save login state
+    await AuthService.setLoggedIn(true, phone: _phoneNumber);
+    
+    // Navigate to home screen
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const HomeScreen(),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _currentStep == AuthStep.loginSignup,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          _handleBackNavigation();
+        }
+      },
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        transitionBuilder: (child, animation) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(1, 0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            )),
+            child: child,
+          );
+        },
+        child: _buildCurrentStep(),
+      ),
+    );
+  }
+
+  void _handleBackNavigation() {
+    switch (_currentStep) {
+      case AuthStep.otp:
+        _navigateToStep(AuthStep.loginSignup);
+        break;
+      case AuthStep.personalDetails:
+        _navigateToStep(AuthStep.otp);
+        break;
+      case AuthStep.driverDetails:
+        _navigateToStep(AuthStep.personalDetails);
+        break;
+      case AuthStep.loginSignup:
+        break;
+    }
+  }
+
+  Widget _buildCurrentStep() {
+    switch (_currentStep) {
+      case AuthStep.loginSignup:
+        return _LoginSignupScreen(
+          key: const ValueKey('login_signup'),
+          onPhoneSubmit: _onPhoneSubmit,
+        );
+      case AuthStep.otp:
+        return OtpVerificationScreen(
+          key: const ValueKey('otp'),
+          phoneNumber: _phoneNumber,
+          countryCode: _countryCode,
+          onVerified: _onOtpVerified,
+          onBack: () => _navigateToStep(AuthStep.loginSignup),
+        );
+      case AuthStep.personalDetails:
+        return PersonalDetailsScreen(
+          key: const ValueKey('personal_details'),
+          onContinue: _onPersonalDetailsComplete,
+          onBack: () => _navigateToStep(AuthStep.otp),
+        );
+      case AuthStep.driverDetails:
+        return DriverDetailsScreen(
+          key: const ValueKey('driver_details'),
+          onComplete: _onAuthComplete,
+          onSkip: _onAuthComplete,
+          onBack: () => _navigateToStep(AuthStep.personalDetails),
+        );
+    }
+  }
+}
+
+enum AuthStep {
+  loginSignup,
+  otp,
+  personalDetails,
+  driverDetails,
+}
+
+// ============================================================================
+// Login / Sign Up Screen
+// ============================================================================
+
+class _LoginSignupScreen extends StatefulWidget {
+  final void Function(String phone, String countryCode, bool isSignUp) onPhoneSubmit;
+
+  const _LoginSignupScreen({
+    super.key,
+    required this.onPhoneSubmit,
+  });
+
+  @override
+  State<_LoginSignupScreen> createState() => _LoginSignupScreenState();
+}
+
+class _LoginSignupScreenState extends State<_LoginSignupScreen> {
+  int _tabIndex = 0; // 0 = Log In, 1 = Sign Up
+  String _countryCode = '+91';
+  final _phoneCtrl = TextEditingController();
+  bool _agree = false;
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _isPhoneValid => _phoneCtrl.text.length >= 10;
+
+  void _onSubmit() {
+    if (!_isPhoneValid) return;
+    
+    HapticFeedback.lightImpact();
+    widget.onPhoneSubmit(
+      _phoneCtrl.text,
+      _countryCode,
+      _tabIndex == 1, // isSignUp
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isSignUp = _tabIndex == 1;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -40,18 +202,15 @@ class _AuthScreenState extends State<AuthScreen> {
           padding: const EdgeInsets.only(bottom: 24),
           child: Column(
             children: [
-              _TopBar(
-                title: "UNIRIDE",
+              AuthAppBar(
+                title: 'UNIRIDE',
                 onBack: () => Navigator.maybePop(context),
               ),
 
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: _TopCards(
-                  primary: kPrimary,
-                  cardBorder: kCardBorder,
-                ),
+                child: _TopCards(),
               ),
 
               const SizedBox(height: 18),
@@ -59,58 +218,150 @@ class _AuthScreenState extends State<AuthScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: _AuthTabs(
                   selectedIndex: _tabIndex,
-                  primary: kPrimary,
                   onChanged: (i) => setState(() => _tabIndex = i),
                 ),
               ),
 
-              // Content area (only Sign Up UI shown here to match screenshot)
               const SizedBox(height: 10),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: _ContentCard(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: _tabIndex == 0
-                        ? _LoginPlaceholder(primary: kPrimary)
-                        : _SignUpForm(
-                      primary: kPrimary,
-                      muted: kMuted,
-                      cardBorder: kCardBorder,
-                      role: _role,
-                      onRoleChanged: (r) => setState(() => _role = r),
-                      emailCtrl: _emailCtrl,
-                      passCtrl: _passCtrl,
-                      obscure: _obscure,
-                      onToggleObscure: () =>
-                          setState(() => _obscure = !_obscure),
-                      agree: _agree,
-                      onAgreeChanged: (v) =>
-                          setState(() => _agree = v ?? false),
-                      onSubmit: () {
-                        // TODO: call your signup API
-                      },
-                      onGoogle: () {
-                        // TODO: google sign-in
-                      },
-                      onApple: () {
-                        // TODO: apple sign-in
-                      },
-                      onTerms: () {
-                        // TODO: open terms
-                      },
-                      onPrivacy: () {
-                        // TODO: open privacy
-                      },
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 8),
+                      Text(
+                        isSignUp ? 'Sign Up' : 'Welcome Back',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        isSignUp
+                            ? 'Enter your mobile number to get started.'
+                            : 'Log in using your phone number.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: kMuted, fontSize: 14),
+                      ),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // Phone Number Label
+                      const Text(
+                        'PHONE NUMBER',
+                        style: TextStyle(
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: kMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      
+                      // Phone Number Input
+                      PhoneNumberField(
+                        controller: _phoneCtrl,
+                      ),
+                      
+                      if (isSignUp) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Checkbox(
+                              value: _agree,
+                              onChanged: (v) => setState(() => _agree = v ?? false),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              side: const BorderSide(color: kCardBorder),
+                              activeColor: kPrimary,
+                            ),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Wrap(
+                                  children: [
+                                    const Text(
+                                      'By continuing, you agree to our ',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () {
+                                        // TODO: Open terms
+                                      },
+                                      child: Text(
+                                        'Terms of Service',
+                                        style: TextStyle(
+                                          color: kPrimary,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    const Text(
+                                      ' and ',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () {
+                                        // TODO: Open privacy
+                                      },
+                                      child: Text(
+                                        'Privacy Policy',
+                                        style: TextStyle(
+                                          color: kPrimary,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    const Text(
+                                      '.',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      
+                      const SizedBox(height: 20),
+                      
+                      // Submit Button
+                      AuthButton(
+                        label: isSignUp ? 'Send OTP' : 'Get OTP',
+                        icon: Icons.message_outlined,
+                        onPressed: (isSignUp ? (_isPhoneValid && _agree) : _isPhoneValid)
+                            ? _onSubmit
+                            : null,
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      // Social Login
+                      SocialLoginButtons(
+                        onGoogle: () {
+                          // TODO: Google sign-in
+                        },
+                        onApple: () {
+                          // TODO: Apple sign-in
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-              const SizedBox(height: 14),
-              const Text(
-                "© 2023 University Carpool Inc.",
-                style: TextStyle(color: Color(0xFF9CA3AF)),
+              const SizedBox(height: 16),
+              Text(
+                '© 2023 University Carpool Inc.',
+                style: TextStyle(color: kMuted.withValues(alpha: 0.7)),
               ),
             ],
           ),
@@ -120,50 +371,15 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-class _TopBar extends StatelessWidget {
-  final String title;
-  final VoidCallback onBack;
-
-  const _TopBar({required this.title, required this.onBack});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new),
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  letterSpacing: 1.2,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 48), // to balance the back button
-        ],
-      ),
-    );
-  }
-}
+// ============================================================================
+// Top Hero Cards
+// ============================================================================
 
 class _TopCards extends StatelessWidget {
-  final Color primary;
-  final Color cardBorder;
-
-  const _TopCards({required this.primary, required this.cardBorder});
-
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
-    final leftWidth = (w - 36) * 0.52; // approx like screenshot (left bigger)
+    final leftWidth = (w - 36) * 0.52;
     final rightWidth = (w - 36) * 0.44;
 
     return Row(
@@ -178,10 +394,13 @@ class _TopCards extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // If you don't have an asset yet, you can temporarily use Image.network(...)
                 Image.asset(
-                  "assets/images/community.jpg",
+                  'assets/images/community.jpg',
                   fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: kPrimary.withValues(alpha: 0.2),
+                    child: Icon(Icons.people, size: 60, color: kPrimary),
+                  ),
                 ),
                 Container(
                   decoration: BoxDecoration(
@@ -203,12 +422,12 @@ class _TopCards extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Community",
+                        'Community',
                         style: TextStyle(color: Colors.white70, fontSize: 14),
                       ),
                       SizedBox(height: 4),
                       Text(
-                        "Join 5k+\nStudents",
+                        'Join 5k+\nStudents',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 22,
@@ -234,12 +453,12 @@ class _TopCards extends StatelessWidget {
               Container(
                 height: 84,
                 decoration: BoxDecoration(
-                  color: primary.withValues(alpha: 0.12),
+                  color: kPrimary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: primary.withValues(alpha: 0.08)),
+                  border: Border.all(color: kPrimary.withValues(alpha: 0.08)),
                 ),
                 child: Center(
-                  child: Icon(Icons.directions_car, color: primary, size: 34),
+                  child: Icon(Icons.directions_car, color: kPrimary, size: 34),
                 ),
               ),
               const SizedBox(height: 12),
@@ -249,7 +468,7 @@ class _TopCards extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: cardBorder),
+                  border: Border.all(color: kCardBorder),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.05),
@@ -258,17 +477,17 @@ class _TopCards extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "Safe Rides",
+                    const Text(
+                      'Safe Rides',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                     ),
-                    SizedBox(height: 6),
+                    const SizedBox(height: 6),
                     Text(
-                      "Verified campus emails\nonly.",
-                      style: TextStyle(color: Color(0xFF6B7280), height: 1.25),
+                      'Verified campus emails\nonly.',
+                      style: TextStyle(color: kMuted, height: 1.25),
                     ),
                   ],
                 ),
@@ -281,15 +500,17 @@ class _TopCards extends StatelessWidget {
   }
 }
 
+// ============================================================================
+// Auth Tab Switcher
+// ============================================================================
+
 class _AuthTabs extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onChanged;
-  final Color primary;
 
   const _AuthTabs({
     required this.selectedIndex,
     required this.onChanged,
-    required this.primary,
   });
 
   @override
@@ -297,22 +518,20 @@ class _AuthTabs extends StatelessWidget {
     return Container(
       height: 54,
       decoration: BoxDecoration(
-        color: const Color(0xFFF6F7FB),
+        color: kBackground,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE6EAF0)),
+        border: Border.all(color: kCardBorder),
       ),
       child: Row(
         children: [
           _TabItem(
-            label: "Log In",
+            label: 'Log In',
             selected: selectedIndex == 0,
-            primary: primary,
             onTap: () => onChanged(0),
           ),
           _TabItem(
-            label: "Sign Up",
+            label: 'Sign Up',
             selected: selectedIndex == 1,
-            primary: primary,
             trailingDot: true,
             onTap: () => onChanged(1),
           ),
@@ -325,21 +544,19 @@ class _AuthTabs extends StatelessWidget {
 class _TabItem extends StatelessWidget {
   final String label;
   final bool selected;
-  final Color primary;
   final VoidCallback onTap;
   final bool trailingDot;
 
   const _TabItem({
     required this.label,
     required this.selected,
-    required this.primary,
     required this.onTap,
     this.trailingDot = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final labelColor = selected ? primary : const Color(0xFF9CA3AF);
+    final labelColor = selected ? kPrimary : kMuted;
 
     return Expanded(
       child: InkWell(
@@ -373,7 +590,6 @@ class _TabItem extends StatelessWidget {
                 ],
               ),
             ),
-            // Bottom indicator line (like screenshot)
             Align(
               alignment: Alignment.bottomCenter,
               child: AnimatedContainer(
@@ -381,7 +597,7 @@ class _TabItem extends StatelessWidget {
                 height: 3,
                 width: selected ? 140 : 0,
                 decoration: BoxDecoration(
-                  color: selected ? primary : Colors.transparent,
+                  color: selected ? kPrimary : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
@@ -393,6 +609,10 @@ class _TabItem extends StatelessWidget {
   }
 }
 
+// ============================================================================
+// Content Card Container
+// ============================================================================
+
 class _ContentCard extends StatelessWidget {
   final Widget child;
 
@@ -401,11 +621,11 @@ class _ContentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+      padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE6EAF0)),
+        border: Border.all(color: kCardBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
@@ -415,322 +635,6 @@ class _ContentCard extends StatelessWidget {
         ],
       ),
       child: child,
-    );
-  }
-}
-
-class _LoginPlaceholder extends StatelessWidget {
-  final Color primary;
-  const _LoginPlaceholder({required this.primary});
-
-  @override
-  Widget build(BuildContext context) {
-    // Just a placeholder so the tab switch works.
-    // You can build a similar Login form later.
-    return Column(
-      key: const ValueKey("login"),
-      children: [
-        const Text(
-          "Log In",
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          "Build your login form here.",
-          style: TextStyle(color: Color(0xFF6B7280)),
-        ),
-        const SizedBox(height: 18),
-        ElevatedButton(
-          onPressed: () {},
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primary,
-            foregroundColor: Colors.white,
-            minimumSize: const Size.fromHeight(54),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          ),
-          child: const Text("Continue"),
-        ),
-      ],
-    );
-  }
-}
-
-class _SignUpForm extends StatelessWidget {
-  final Color primary;
-  final Color muted;
-  final Color cardBorder;
-
-  final UserRole role;
-  final ValueChanged<UserRole> onRoleChanged;
-
-  final TextEditingController emailCtrl;
-  final TextEditingController passCtrl;
-
-  final bool obscure;
-  final VoidCallback onToggleObscure;
-
-  final bool agree;
-  final ValueChanged<bool?> onAgreeChanged;
-
-  final VoidCallback onSubmit;
-  final VoidCallback onGoogle;
-  final VoidCallback onApple;
-
-  final VoidCallback onTerms;
-  final VoidCallback onPrivacy;
-
-  const _SignUpForm({
-    super.key,
-    required this.primary,
-    required this.muted,
-    required this.cardBorder,
-    required this.role,
-    required this.onRoleChanged,
-    required this.emailCtrl,
-    required this.passCtrl,
-    required this.obscure,
-    required this.onToggleObscure,
-    required this.agree,
-    required this.onAgreeChanged,
-    required this.onSubmit,
-    required this.onGoogle,
-    required this.onApple,
-    required this.onTerms,
-    required this.onPrivacy,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      key: const ValueKey("signup"),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: 4),
-        const Text(
-          "Create Account",
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          "Start your campus commute today.",
-          textAlign: TextAlign.center,
-          style: TextStyle(color: muted, fontSize: 16),
-        ),
-        const SizedBox(height: 18),
-
-        // Student / Faculty segmented control (Material 3)
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF6F7FB),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cardBorder),
-          ),
-          child: SegmentedButton<UserRole>(
-            segments: const [
-              ButtonSegment(value: UserRole.student, label: Text("Student")),
-              ButtonSegment(value: UserRole.faculty, label: Text("Faculty")),
-            ],
-            selected: {role},
-            onSelectionChanged: (set) => onRoleChanged(set.first),
-            showSelectedIcon: false,
-            style: ButtonStyle(
-              backgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) return Colors.white;
-                return Colors.transparent;
-              }),
-              foregroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) return primary;
-                return const Color(0xFF374151);
-              }),
-              textStyle: WidgetStateProperty.all(
-                const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-              ),
-              shape: WidgetStateProperty.all(
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              side: WidgetStateProperty.all(BorderSide(color: cardBorder)),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 18),
-        const Text(
-          "UNIVERSITY EMAIL",
-          style: TextStyle(
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF6B7280),
-          ),
-        ),
-        const SizedBox(height: 8),
-        _Field(
-          controller: emailCtrl,
-          hint: "student_id@university.edu",
-          prefix: Icons.school_outlined,
-          keyboardType: TextInputType.emailAddress,
-        ),
-
-        const SizedBox(height: 16),
-        const Text(
-          "PASSWORD",
-          style: TextStyle(
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF6B7280),
-          ),
-        ),
-        const SizedBox(height: 8),
-        _Field(
-          controller: passCtrl,
-          hint: "••••••••",
-          prefix: Icons.lock_outline,
-          obscure: obscure,
-          suffix: IconButton(
-            onPressed: onToggleObscure,
-            icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-          ),
-        ),
-
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Checkbox(
-              value: agree,
-              onChanged: onAgreeChanged,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              side: const BorderSide(color: Color(0xFFD1D5DB)),
-            ),
-            Expanded(
-              child: Wrap(
-                children: [
-                  const Text("I agree to the "),
-                  InkWell(
-                    onTap: onTerms,
-                    child: Text("Terms of Service", style: TextStyle(color: primary)),
-                  ),
-                  const Text(" and "),
-                  InkWell(
-                    onTap: onPrivacy,
-                    child: Text("Privacy Policy", style: TextStyle(color: primary)),
-                  ),
-                  const Text("."),
-                ],
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 14),
-        ElevatedButton(
-          onPressed: agree ? onSubmit : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primary,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: primary.withValues(alpha: 0.4),
-            minimumSize: const Size.fromHeight(62),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-          ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text("Create Account"),
-              SizedBox(width: 10),
-              Icon(Icons.arrow_forward),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 18),
-        Row(
-          children: const [
-            Expanded(child: Divider()),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Text("Or continue with", style: TextStyle(color: Color(0xFF9CA3AF))),
-            ),
-            Expanded(child: Divider()),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onGoogle,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(54),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  side: const BorderSide(color: Color(0xFFE6EAF0)),
-                ),
-                child: const Text("Google", style: TextStyle(fontWeight: FontWeight.w800)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onApple,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(54),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  side: const BorderSide(color: Color(0xFFE6EAF0)),
-                ),
-                child: const Text("Apple", style: TextStyle(fontWeight: FontWeight.w800)),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _Field extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final IconData prefix;
-  final Widget? suffix;
-  final bool obscure;
-  final TextInputType? keyboardType;
-
-  const _Field({
-    required this.controller,
-    required this.hint,
-    required this.prefix,
-    this.suffix,
-    this.obscure = false,
-    this.keyboardType,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      obscureText: obscure,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        hintText: hint,
-        prefixIcon: Icon(prefix),
-        suffixIcon: suffix,
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFE6EAF0)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFE6EAF0)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFF14B08A), width: 1.5),
-        ),
-      ),
     );
   }
 }
