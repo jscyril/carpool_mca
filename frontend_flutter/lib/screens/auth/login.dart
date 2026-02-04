@@ -56,13 +56,11 @@ class _AuthScreenState extends State<AuthScreen> {
   void _onAuthComplete() async {
     // Save login state
     await AuthService.setLoggedIn(true, phone: _phoneNumber);
-    
+
     // Navigate to home screen
     if (mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
       );
     }
   }
@@ -80,13 +78,13 @@ class _AuthScreenState extends State<AuthScreen> {
         duration: const Duration(milliseconds: 300),
         transitionBuilder: (child, animation) {
           return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(1, 0),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
+            position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           );
         },
@@ -143,24 +141,17 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-enum AuthStep {
-  loginSignup,
-  otp,
-  personalDetails,
-  driverDetails,
-}
+enum AuthStep { loginSignup, otp, personalDetails, driverDetails }
 
 // ============================================================================
 // Login / Sign Up Screen
 // ============================================================================
 
 class _LoginSignupScreen extends StatefulWidget {
-  final void Function(String phone, String countryCode, bool isSignUp) onPhoneSubmit;
+  final void Function(String phone, String countryCode, bool isSignUp)
+  onPhoneSubmit;
 
-  const _LoginSignupScreen({
-    super.key,
-    required this.onPhoneSubmit,
-  });
+  const _LoginSignupScreen({super.key, required this.onPhoneSubmit});
 
   @override
   State<_LoginSignupScreen> createState() => _LoginSignupScreenState();
@@ -173,6 +164,13 @@ class _LoginSignupScreenState extends State<_LoginSignupScreen> {
   bool _agree = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Listener triggers rebuild when phone number changes, enabling/disabling button
+    _phoneCtrl.addListener(() => setState(() {}));
+  }
+
+  @override
   void dispose() {
     _phoneCtrl.dispose();
     super.dispose();
@@ -182,7 +180,7 @@ class _LoginSignupScreenState extends State<_LoginSignupScreen> {
 
   void _onSubmit() {
     if (!_isPhoneValid) return;
-    
+
     HapticFeedback.lightImpact();
     widget.onPhoneSubmit(
       _phoneCtrl.text,
@@ -246,9 +244,9 @@ class _LoginSignupScreenState extends State<_LoginSignupScreen> {
                         textAlign: TextAlign.center,
                         style: TextStyle(color: kMuted, fontSize: 14),
                       ),
-                      
+
                       const SizedBox(height: 24),
-                      
+
                       // Phone Number Label
                       const Text(
                         'PHONE NUMBER',
@@ -260,12 +258,10 @@ class _LoginSignupScreenState extends State<_LoginSignupScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      
+
                       // Phone Number Input
-                      PhoneNumberField(
-                        controller: _phoneCtrl,
-                      ),
-                      
+                      PhoneNumberField(controller: _phoneCtrl),
+
                       if (isSignUp) ...[
                         const SizedBox(height: 16),
                         Row(
@@ -273,7 +269,8 @@ class _LoginSignupScreenState extends State<_LoginSignupScreen> {
                           children: [
                             Checkbox(
                               value: _agree,
-                              onChanged: (v) => setState(() => _agree = v ?? false),
+                              onChanged: (v) =>
+                                  setState(() => _agree = v ?? false),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(4),
                               ),
@@ -330,20 +327,23 @@ class _LoginSignupScreenState extends State<_LoginSignupScreen> {
                           ],
                         ),
                       ],
-                      
+
                       const SizedBox(height: 20),
-                      
+
                       // Submit Button
                       AuthButton(
                         label: isSignUp ? 'Send OTP' : 'Get OTP',
                         icon: Icons.message_outlined,
-                        onPressed: (isSignUp ? (_isPhoneValid && _agree) : _isPhoneValid)
+                        onPressed:
+                            (isSignUp
+                                ? (_isPhoneValid && _agree)
+                                : _isPhoneValid)
                             ? _onSubmit
                             : null,
                       ),
-                      
+
                       const SizedBox(height: 20),
-                      
+
                       // Social Login
                       SocialLoginButtons(
                         onGoogle: () {
@@ -482,7 +482,10 @@ class _TopCards extends StatelessWidget {
                   children: [
                     const Text(
                       'Safe Rides',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -494,7 +497,7 @@ class _TopCards extends StatelessWidget {
               ),
             ],
           ),
-        )
+        ),
       ],
     );
   }
@@ -508,10 +511,7 @@ class _AuthTabs extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onChanged;
 
-  const _AuthTabs({
-    required this.selectedIndex,
-    required this.onChanged,
-  });
+  const _AuthTabs({required this.selectedIndex, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -585,7 +585,7 @@ class _TabItem extends StatelessWidget {
                         color: Color(0xFFF5C34B),
                         shape: BoxShape.circle,
                       ),
-                    )
+                    ),
                   ],
                 ],
               ),

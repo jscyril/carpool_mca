@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'common_widgets.dart';
+import '../../main.dart';
 
 class PersonalDetailsScreen extends StatefulWidget {
   final VoidCallback? onContinue;
@@ -135,10 +136,13 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
 
     setState(() => _isLoading = true);
 
-    // Simulate API call to save user details
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    // TODO: Replace with actual API call to save user details
+    // Save user profile data to SharedPreferences
+    await AuthService.saveUserProfile(
+      name: _fullNameCtrl.text.trim(),
+      email: _emailCtrl.text.trim(),
+      dob: _formattedDob,
+      address: _addressCtrl.text.trim(),
+    );
 
     setState(() => _isLoading = false);
     widget.onContinue?.call();

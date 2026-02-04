@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../auth/common_widgets.dart';
+import '../profile/user_profile.dart';
+import '../settings/settings_screen.dart';
+import 'location_search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +20,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
@@ -66,39 +68,55 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       children: [
         Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: kBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: kCardBorder),
+          child: GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LocationSearchScreen(),
+              ),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.search, color: kMuted),
-                const SizedBox(width: 12),
-                Text(
-                  'Where to?',
-                  style: TextStyle(color: kMuted, fontSize: 16),
-                ),
-              ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: kBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kCardBorder),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.search, color: kMuted),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Where to?',
+                    style: TextStyle(color: kMuted, fontSize: 16),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
         const SizedBox(width: 12),
-        // Profile avatar
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: kPrimary.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: kPrimary.withValues(alpha: 0.3),
-              width: 2,
+        // Profile avatar - taps navigate to user profile
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const UserProfileScreen()),
+          ),
+          child: Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: kPrimary.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: kPrimary.withValues(alpha: 0.3),
+                width: 2,
+              ),
+            ),
+            child: ClipOval(
+              child: Icon(Icons.person, color: kPrimary, size: 28),
             ),
           ),
-          child: ClipOval(child: Icon(Icons.person, color: kPrimary, size: 28)),
         ),
       ],
     );
@@ -241,8 +259,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _buildRideOption(
           title: 'UniPool',
           subtitle: '3 seats left • 4 min away',
-          price: '\$4.50',
-          originalPrice: '\$6.00',
+          price: '₹120',
+          originalPrice: '₹160',
           isEcoChoice: true,
           isSelected: true,
         ),
@@ -253,7 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _buildRideOption(
           title: 'Direct',
           subtitle: 'Private • 6 min away',
-          price: '\$8.00',
+          price: '₹200',
           isEcoChoice: false,
           isSelected: false,
         ),
@@ -269,10 +287,11 @@ class _HomeScreenState extends State<HomeScreen> {
     required bool isEcoChoice,
     required bool isSelected,
   }) {
+    final cardColor = Theme.of(context).cardColor;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isSelected ? kPrimary : kCardBorder,
@@ -379,10 +398,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBottomSection() {
+    final cardColor = Theme.of(context).cardColor;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         border: Border(top: BorderSide(color: kCardBorder)),
       ),
       child: Column(
@@ -435,10 +455,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBottomNav() {
+    final cardColor = Theme.of(context).cardColor;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         border: Border(top: BorderSide(color: kCardBorder)),
       ),
       child: Row(
@@ -447,7 +468,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildNavItem(0, Icons.directions_car, 'Rider'),
           _buildNavItem(1, Icons.local_taxi, 'Driver'),
           _buildNavItem(2, Icons.receipt_long, 'Activity'),
-          _buildNavItem(3, Icons.person_outline, 'Profile'),
+          _buildNavItem(3, Icons.settings_outlined, 'Settings'),
         ],
       ),
     );
@@ -456,7 +477,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _selectedNavIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _selectedNavIndex = index),
+      onTap: () {
+        if (index == 3) {
+          // Navigate to Settings screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+          );
+        } else {
+          setState(() => _selectedNavIndex = index);
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Column(
