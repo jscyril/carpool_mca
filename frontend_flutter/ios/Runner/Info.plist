@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>UniRide needs your location to find nearby rides and show your position on the map.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>UniRide needs your location to track your ride in real-time.</string>
 </dict>
 </plist>

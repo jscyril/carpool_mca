@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../auth/common_widgets.dart';
 import '../profile/user_profile.dart';
 import '../settings/settings_screen.dart';
+import '../../services/location_service.dart';
 import 'location_search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -14,8 +17,29 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedNavIndex = 0;
   String _selectedQuickDestination = 'Campus';
+  LatLng? _currentLocation;
 
   final List<String> _quickDestinations = ['Campus', 'Home', 'Library'];
+
+  // Default center: Bangalore
+  static const LatLng _defaultCenter = LatLng(12.9716, 77.5946);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentLocation();
+  }
+
+  Future<void> _loadCurrentLocation() async {
+    try {
+      final loc = await LocationService.getCurrentLocation();
+      if (mounted) {
+        setState(() => _currentLocation = loc);
+      }
+    } catch (_) {
+      // GPS not available — use default center
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       const SizedBox(height: 24),
 
-                      // Map placeholder
+                      // Live Map section
                       _buildMapSection(),
 
                       const SizedBox(height: 24),
@@ -176,35 +200,72 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMapSection() {
+    final center = _currentLocation ?? _defaultCenter;
+
     return Container(
-      height: 160,
+      height: 180,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: kCardBorder),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          // Simulated map background
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [const Color(0xFFE8F5E9), const Color(0xFFC8E6C9)],
-                  ),
-                ),
+          // Live OpenStreetMap
+          FlutterMap(
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: 14.0,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.none,
               ),
             ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.uniride.carpool',
+              ),
+              // User location marker
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: center,
+                    width: 40,
+                    height: 40,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: kPrimary.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: kPrimary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: kPrimary.withValues(alpha: 0.4),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          // Location label
+
+          // Location label overlay
           Positioned(
-            left: 16,
-            top: 16,
+            left: 12,
+            top: 12,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
@@ -218,17 +279,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              child: const Text(
-                'Student Union',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.my_location, size: 14, color: kPrimary),
+                  const SizedBox(width: 6),
+                  Text(
+                    _currentLocation != null ? 'Your Location' : 'Bangalore',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          // Location pin
-          Positioned(
-            left: 50,
-            top: 70,
-            child: Icon(Icons.location_on, color: kPrimary, size: 32),
           ),
         ],
       ),
@@ -436,7 +502,6 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Request UniPool',
             icon: Icons.arrow_forward,
             onPressed: () {
-              // TODO: Request ride
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: const Text('Looking for drivers...'),

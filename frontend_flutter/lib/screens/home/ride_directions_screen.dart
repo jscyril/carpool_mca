@@ -1,15 +1,112 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../auth/common_widgets.dart';
+import '../../services/routing_service.dart';
 
-class RideDirectionsScreen extends StatelessWidget {
+class RideDirectionsScreen extends StatefulWidget {
   final String fromLocation;
   final String toLocation;
+  final LatLng fromLatLng;
+  final LatLng toLatLng;
 
   const RideDirectionsScreen({
     super.key,
     required this.fromLocation,
     required this.toLocation,
+    required this.fromLatLng,
+    required this.toLatLng,
   });
+
+  @override
+  State<RideDirectionsScreen> createState() => _RideDirectionsScreenState();
+}
+
+class _RideDirectionsScreenState extends State<RideDirectionsScreen> {
+  final MapController _mapController = MapController();
+  List<LatLng> _routePoints = [];
+  double? _distanceKm;
+  double? _durationMinutes;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRoute();
+  }
+
+  Future<void> _fetchRoute() async {
+    try {
+      final result = await RoutingService.getRoute(
+        widget.fromLatLng,
+        widget.toLatLng,
+      );
+
+      if (mounted) {
+        setState(() {
+          _routePoints = result.points;
+          _distanceKm = result.distanceKm;
+          _durationMinutes = result.durationMinutes;
+          _isLoading = false;
+        });
+
+        // Fit map to show the full route
+        _fitMapToRoute();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Could not load route. Please try again.';
+        });
+      }
+    }
+  }
+
+  void _fitMapToRoute() {
+    final points = [widget.fromLatLng, widget.toLatLng, ..._routePoints];
+    if (points.isEmpty) return;
+
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (final p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+
+    final bounds = LatLngBounds(LatLng(minLat, minLng), LatLng(maxLat, maxLng));
+
+    // Delay slightly to ensure map is ready
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        _mapController.fitCamera(
+          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60)),
+        );
+      }
+    });
+  }
+
+  String _formatDuration(double minutes) {
+    if (minutes < 60) {
+      return '${minutes.round()} min';
+    }
+    final hours = (minutes / 60).floor();
+    final mins = (minutes % 60).round();
+    return '${hours}h ${mins}m';
+  }
+
+  String _estimateFare(double distanceKm) {
+    // Rough fare estimate: ₹10 base + ₹8/km
+    final minFare = (10 + distanceKm * 6).round();
+    final maxFare = (10 + distanceKm * 10).round();
+    return '₹$minFare - ₹$maxFare';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,15 +129,15 @@ class RideDirectionsScreen extends StatelessWidget {
         children: [
           // Location summary card
           Container(
-            margin: const EdgeInsets.all(20),
-            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: cardColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: kCardBorder),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -52,101 +149,163 @@ class RideDirectionsScreen extends StatelessWidget {
                   icon: Icons.circle,
                   iconColor: kPrimary,
                   label: 'From',
-                  location: fromLocation,
+                  location: widget.fromLocation,
                 ),
                 Padding(
                   padding: const EdgeInsets.only(left: 11),
-                  child: Container(width: 2, height: 30, color: kCardBorder),
+                  child: Container(width: 2, height: 24, color: kCardBorder),
                 ),
                 _buildLocationRow(
                   icon: Icons.location_on,
                   iconColor: Colors.red,
                   label: 'To',
-                  location: toLocation,
+                  location: widget.toLocation,
                 ),
               ],
             ),
           ),
 
-          // Simulated Map
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFFE8F5E9),
-                    const Color(0xFFC8E6C9),
-                    kPrimary.withOpacity(0.2),
-                  ],
-                ),
-                border: Border.all(color: kCardBorder),
-              ),
-              child: Stack(
+          // Route info chips
+          if (!_isLoading && _distanceKm != null && _durationMinutes != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
                 children: [
-                  // Simulated route line
-                  Center(
-                    child: CustomPaint(
-                      size: const Size(200, 150),
-                      painter: _RoutePainter(),
-                    ),
+                  _buildInfoChip(
+                    icon: Icons.straighten,
+                    label: '${_distanceKm!.toStringAsFixed(1)} km',
+                    color: kPrimary,
                   ),
-
-                  // From marker
-                  Positioned(
-                    top: 40,
-                    left: 50,
-                    child: _buildMapMarker(
-                      icon: Icons.circle,
-                      color: kPrimary,
-                      label: 'Start',
-                    ),
-                  ),
-
-                  // To marker
-                  Positioned(
-                    bottom: 60,
-                    right: 50,
-                    child: _buildMapMarker(
-                      icon: Icons.location_on,
-                      color: Colors.red,
-                      label: 'End',
-                    ),
-                  ),
-
-                  // Map placeholder text
-                  const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map, size: 48, color: kPrimary),
-                        SizedBox(height: 8),
-                        Text(
-                          'Map Preview',
-                          style: TextStyle(
-                            color: kPrimary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Text(
-                          'Route visualization coming soon',
-                          style: TextStyle(color: kMuted, fontSize: 12),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(width: 10),
+                  _buildInfoChip(
+                    icon: Icons.access_time,
+                    label: _formatDuration(_durationMinutes!),
+                    color: const Color(0xFF6366F1),
                   ),
                 ],
               ),
+            ),
+
+          const SizedBox(height: 12),
+
+          // Real Map
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: kCardBorder),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: _isLoading
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: kPrimary),
+                          SizedBox(height: 16),
+                          Text(
+                            'Loading route...',
+                            style: TextStyle(
+                              color: kMuted,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _errorMessage != null
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            color: Colors.orange,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: kMuted),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _isLoading = true;
+                                _errorMessage = null;
+                              });
+                              _fetchRoute();
+                            },
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: widget.fromLatLng,
+                        initialZoom: 12,
+                      ),
+                      children: [
+                        // OSM tile layer
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.uniride.carpool',
+                        ),
+
+                        // Route polyline
+                        if (_routePoints.isNotEmpty)
+                          PolylineLayer(
+                            polylines: [
+                              Polyline(
+                                points: _routePoints,
+                                strokeWidth: 5.0,
+                                color: kPrimary,
+                              ),
+                            ],
+                          ),
+
+                        // Markers
+                        MarkerLayer(
+                          markers: [
+                            // Start marker
+                            Marker(
+                              point: widget.fromLatLng,
+                              width: 90,
+                              height: 50,
+                              child: _buildMapPin(
+                                icon: Icons.trip_origin,
+                                color: kPrimary,
+                                label: 'Start',
+                              ),
+                            ),
+                            // End marker
+                            Marker(
+                              point: widget.toLatLng,
+                              width: 90,
+                              height: 50,
+                              child: _buildMapPin(
+                                icon: Icons.location_on,
+                                color: Colors.red,
+                                label: 'End',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
             ),
           ),
 
           // Bottom action
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: cardColor,
               border: Border(top: BorderSide(color: kCardBorder)),
@@ -160,9 +319,11 @@ class RideDirectionsScreen extends StatelessWidget {
                       'Estimated fare',
                       style: TextStyle(color: kMuted),
                     ),
-                    const Text(
-                      '₹80 - ₹150',
-                      style: TextStyle(
+                    Text(
+                      _distanceKm != null
+                          ? _estimateFare(_distanceKm!)
+                          : '₹80 - ₹150',
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
@@ -184,7 +345,6 @@ class RideDirectionsScreen extends StatelessWidget {
                         ),
                       ),
                     );
-                    // Pop back to home after a delay
                     Future.delayed(const Duration(seconds: 1), () {
                       if (context.mounted) {
                         Navigator.of(
@@ -210,7 +370,7 @@ class RideDirectionsScreen extends StatelessWidget {
   }) {
     return Row(
       children: [
-        Icon(icon, color: iconColor, size: 22),
+        Icon(icon, color: iconColor, size: 20),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -228,7 +388,7 @@ class RideDirectionsScreen extends StatelessWidget {
                 location,
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -240,34 +400,28 @@ class RideDirectionsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMapMarker({
+  Widget _buildInfoChip({
     required IconData icon,
-    required Color color,
     required String label,
+    required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 4),
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
               color: color,
             ),
           ),
@@ -275,54 +429,45 @@ class RideDirectionsScreen extends StatelessWidget {
       ),
     );
   }
-}
 
-// Custom painter for simulated route
-class _RoutePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = kPrimary
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path()
-      ..moveTo(0, 0)
-      ..quadraticBezierTo(
-        size.width * 0.3,
-        size.height * 0.5,
-        size.width * 0.5,
-        size.height * 0.4,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.7,
-        size.height * 0.3,
-        size.width,
-        size.height,
-      );
-
-    // Draw dashed line
-    final dashPath = Path();
-    const dashLength = 8.0;
-    const gapLength = 4.0;
-
-    for (final metric in path.computeMetrics()) {
-      double distance = 0;
-      while (distance < metric.length) {
-        final start = distance;
-        final end = (distance + dashLength).clamp(0, metric.length);
-        dashPath.addPath(
-          metric.extractPath(start, end.toDouble()),
-          Offset.zero,
-        );
-        distance += dashLength + gapLength;
-      }
-    }
-
-    canvas.drawPath(dashPath, paint);
+  Widget _buildMapPin({
+    required IconData icon,
+    required Color color,
+    required String label,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 16),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
