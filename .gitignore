@@ -1,0 +1,7 @@
+
+# GSD local/generated files
+.agent/
+.gemini/
+.gsd/
+__pycache__/
+*.pyc
