@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../auth/common_widgets.dart';
 import '../../services/location_service.dart';
 import 'ride_directions_screen.dart';
+import 'pin_drop_screen.dart';
 
 class LocationSearchScreen extends StatefulWidget {
   const LocationSearchScreen({super.key});
@@ -207,6 +208,27 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     }
   }
 
+  Future<void> _openPinDrop() async {
+    setState(() => _showSearchResults = false);
+
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PinDropScreen(initialLocation: _fromLatLng),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _fromLatLng = LatLng(
+          (result['lat'] as num).toDouble(),
+          (result['lng'] as num).toDouble(),
+        );
+        _fromController.text = result['address'] as String;
+      });
+    }
+  }
+
   void _confirmSelection() {
     if (_fromController.text.isEmpty || _selectedCampus == null) {
       _showSnackBar('Please select both pickup and destination', Colors.orange);
@@ -374,6 +396,15 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _buildQuickOption(
+                      icon: Icons.pin_drop,
+                      label: 'Pin Map',
+                      onTap: _openPinDrop,
+                      cardColor: cardColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildQuickOption(
                       icon: Icons.bookmark_outline,
                       label: 'Saved',
                       onTap: _useSavedAddress,
@@ -384,7 +415,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                   Expanded(
                     child: _buildQuickOption(
                       icon: Icons.save_outlined,
-                      label: 'Save This',
+                      label: 'Save',
                       onTap: _saveCurrentAddress,
                       cardColor: cardColor,
                       isActive: _fromLatLng != null,

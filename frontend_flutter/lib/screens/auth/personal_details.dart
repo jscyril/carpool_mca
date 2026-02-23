@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'common_widgets.dart';
 import '../../main.dart';
+import '../../services/api_service.dart';
 
 class PersonalDetailsScreen extends StatefulWidget {
+  final String phoneVerifiedToken;
   final VoidCallback? onContinue;
   final VoidCallback? onBack;
 
-  const PersonalDetailsScreen({super.key, this.onContinue, this.onBack});
+  const PersonalDetailsScreen({
+    super.key,
+    required this.phoneVerifiedToken,
+    this.onContinue,
+    this.onBack,
+  });
 
   @override
   State<PersonalDetailsScreen> createState() => _PersonalDetailsScreenState();
@@ -20,6 +27,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
   final _addressCtrl = TextEditingController();
 
   DateTime? _dateOfBirth;
+  String _selectedGender = 'male';
   bool _isLoading = false;
   String? _emailError;
   bool _isGettingLocation = false;
@@ -38,10 +46,8 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
   }
 
   bool get _isFormValid {
-    return _fullNameCtrl.text.trim().isNotEmpty &&
-        _isEmailValid &&
-        _dateOfBirth != null;
-    // Address is optional
+    return _fullNameCtrl.text.trim().isNotEmpty && _dateOfBirth != null;
+    // Email and address are optional at registration
   }
 
   void _validateEmail() {
@@ -136,16 +142,46 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
 
     setState(() => _isLoading = true);
 
-    // Save user profile data to SharedPreferences
-    await AuthService.saveUserProfile(
-      name: _fullNameCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
-      dob: _formattedDob,
-      address: _addressCtrl.text.trim(),
+    // Call register API
+    final response = await AuthApiService.register(
+      phoneVerifiedToken: widget.phoneVerifiedToken,
+      fullName: _fullNameCtrl.text.trim(),
+      gender: _selectedGender,
     );
 
-    setState(() => _isLoading = false);
-    widget.onContinue?.call();
+    if (!mounted) return;
+
+    if (response.success && response.data != null) {
+      // Save access token
+      final accessToken = response.data!['access_token'] as String?;
+      if (accessToken != null) {
+        await ApiService.saveAccessToken(accessToken);
+      }
+
+      // Save user profile data to SharedPreferences
+      await AuthService.saveUserProfile(
+        name: _fullNameCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        dob: _formattedDob,
+        address: _addressCtrl.text.trim(),
+      );
+      await AuthService.setLoggedIn(true);
+
+      setState(() => _isLoading = false);
+      widget.onContinue?.call();
+    } else {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(response.error ?? 'Registration failed'),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -222,6 +258,62 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
                         hint: 'Ex. Alex Taylor',
                         prefixIcon: Icons.person_outline,
                         keyboardType: TextInputType.name,
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Gender Selector
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'GENDER *',
+                            style: TextStyle(
+                              letterSpacing: 1.1,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                              color: kMuted,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: kCardBorder),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedGender,
+                                isExpanded: true,
+                                icon: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: kPrimary,
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'male',
+                                    child: Text('Male'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'female',
+                                    child: Text('Female'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'other',
+                                    child: Text('Other'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null)
+                                    setState(() => _selectedGender = value);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
 
                       const SizedBox(height: 20),

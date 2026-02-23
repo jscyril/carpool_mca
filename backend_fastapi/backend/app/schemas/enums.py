@@ -11,6 +11,9 @@ class VehicleTypeEnum(str, Enum):
 
 class RideStatusEnum(str, Enum):
     open = "open"
+    driver_arriving = "driver_arriving"
+    driver_arrived = "driver_arrived"
+    rider_picked_up = "rider_picked_up"
     ongoing = "ongoing"
     completed = "completed"
     cancelled = "cancelled"

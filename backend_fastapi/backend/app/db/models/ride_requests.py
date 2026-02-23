@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Enum, TIMESTAMP, ForeignKey, UniqueConstraint
+from sqlalchemy import Enum, TIMESTAMP, ForeignKey, UniqueConstraint, String, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -25,6 +25,12 @@ class RideRequest(Base):
     request_status: Mapped[RideRequestStatusEnum] = mapped_column(
         Enum(RideRequestStatusEnum), default=RideRequestStatusEnum.pending
     )
+
+    # Per-rider pickup location
+    pickup_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pickup_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pickup_address: Mapped[str | None] = mapped_column(String, nullable=True)
+
     requested_at: Mapped[str] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

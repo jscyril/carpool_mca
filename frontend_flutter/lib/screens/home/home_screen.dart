@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../auth/common_widgets.dart';
 import '../profile/user_profile.dart';
 import '../settings/settings_screen.dart';
+import '../driver/driver_dashboard_screen.dart';
 import '../../services/location_service.dart';
 import 'location_search_screen.dart';
 
@@ -543,8 +544,27 @@ class _HomeScreenState extends State<HomeScreen> {
     final isSelected = _selectedNavIndex == index;
     return GestureDetector(
       onTap: () {
-        if (index == 3) {
-          // Navigate to Settings screen
+        if (index == 1) {
+          // Navigate to Driver Dashboard
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const DriverDashboardScreen(),
+            ),
+          );
+        } else if (index == 2) {
+          // Activity — coming in Wave C
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Activity history coming soon!'),
+              backgroundColor: kPrimary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+        } else if (index == 3) {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const SettingsScreen()),

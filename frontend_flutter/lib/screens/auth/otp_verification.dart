@@ -2,18 +2,30 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'common_widgets.dart';
+import '../../services/api_service.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String phoneNumber;
   final String countryCode;
-  final VoidCallback? onVerified;
+  final String sessionToken;
+  final bool isSignUp;
+  final void Function({
+    String? phoneVerifiedToken,
+    String? accessToken,
+    Map<String, dynamic>? userData,
+  })?
+  onVerified;
+  final Future<bool> Function()? onResendOtp;
   final VoidCallback? onBack;
 
   const OtpVerificationScreen({
     super.key,
     required this.phoneNumber,
     this.countryCode = '+91',
+    required this.sessionToken,
+    this.isSignUp = true,
     this.onVerified,
+    this.onResendOtp,
     this.onBack,
   });
 
@@ -90,9 +102,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
   }
 
-  // Preset test OTP for development (no backend)
-  static const String _testOtp = '160204';
-
   Future<void> _verifyOtp() async {
     if (_isLoading) return;
 
@@ -104,17 +113,34 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     setState(() => _isLoading = true);
 
-    // Simulate OTP verification delay
-    await Future.delayed(const Duration(milliseconds: 1200));
+    // Call the appropriate API endpoint
+    final ApiResponse response;
+    if (widget.isSignUp) {
+      response = await AuthApiService.verifyPhoneOtp(widget.sessionToken, otp);
+    } else {
+      response = await AuthApiService.loginVerifyOtp(widget.sessionToken, otp);
+    }
 
-    // TODO: Replace with actual OTP verification API call
-    // For testing, only accept the preset code: 160204
-    if (otp == _testOtp) {
-      widget.onVerified?.call();
+    if (!mounted) return;
+
+    if (response.success && response.data != null) {
+      if (widget.isSignUp) {
+        // Signup: pass phoneVerifiedToken to next screen
+        widget.onVerified?.call(
+          phoneVerifiedToken: response.data!['phone_verified_token'],
+        );
+      } else {
+        // Login: pass accessToken and user data
+        final userData = response.data!['user'] as Map<String, dynamic>?;
+        widget.onVerified?.call(
+          accessToken: response.data!['access_token'],
+          userData: userData,
+        );
+      }
     } else {
       setState(() {
         _isLoading = false;
-        _errorText = 'Invalid OTP. Please try again.';
+        _errorText = response.error ?? 'Invalid OTP. Please try again.';
         for (var c in _controllers) {
           c.clear();
         }
@@ -123,19 +149,26 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
   }
 
-  void _resendOtp() {
+  void _resendOtp() async {
     if (!_canResend) return;
 
-    // TODO: Call actual resend OTP API
     HapticFeedback.lightImpact();
+
+    // Call parent's resend callback to get a fresh session token
+    final success = await widget.onResendOtp?.call() ?? false;
+
+    if (!mounted) return;
+
     _startResendTimer();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'OTP sent to ${widget.countryCode} ${widget.phoneNumber}',
+          success
+              ? 'OTP sent to ${widget.countryCode} ${widget.phoneNumber}'
+              : 'Failed to resend OTP. Please try again.',
         ),
-        backgroundColor: kPrimary,
+        backgroundColor: success ? kPrimary : Colors.red.shade600,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),

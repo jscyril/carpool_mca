@@ -3,6 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../auth/common_widgets.dart';
 import '../../services/routing_service.dart';
+import '../../services/api_service.dart';
+import 'ride_live_screen.dart';
 
 class RideDirectionsScreen extends StatefulWidget {
   final String fromLocation;
@@ -101,11 +103,20 @@ class _RideDirectionsScreenState extends State<RideDirectionsScreen> {
     return '${hours}h ${mins}m';
   }
 
-  String _estimateFare(double distanceKm) {
-    // Rough fare estimate: ₹10 base + ₹8/km
-    final minFare = (10 + distanceKm * 6).round();
-    final maxFare = (10 + distanceKm * 10).round();
-    return '₹$minFare - ₹$maxFare';
+  double? _fareEstimate;
+
+  Future<void> _fetchFareEstimate() async {
+    final res = await FareApiService.estimateFare(
+      startLat: widget.fromLatLng.latitude,
+      startLng: widget.fromLatLng.longitude,
+      endLat: widget.toLatLng.latitude,
+      endLng: widget.toLatLng.longitude,
+    );
+    if (res.success && res.data != null && mounted) {
+      setState(() {
+        _fareEstimate = (res.data['total_fare'] as num?)?.toDouble();
+      });
+    }
   }
 
   @override
@@ -320,9 +331,9 @@ class _RideDirectionsScreenState extends State<RideDirectionsScreen> {
                       style: TextStyle(color: kMuted),
                     ),
                     Text(
-                      _distanceKm != null
-                          ? _estimateFare(_distanceKm!)
-                          : '₹80 - ₹150',
+                      _fareEstimate != null
+                          ? '₹${_fareEstimate!.round()}'
+                          : '₹--',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -335,23 +346,19 @@ class _RideDirectionsScreenState extends State<RideDirectionsScreen> {
                   label: 'Request Ride',
                   icon: Icons.directions_car,
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Looking for available rides...'),
-                        backgroundColor: kPrimary,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => RideLiveScreen(
+                          fromLocation: widget.fromLocation,
+                          toLocation: widget.toLocation,
+                          fromLatLng: widget.fromLatLng,
+                          toLatLng: widget.toLatLng,
+                          distanceKm: _distanceKm,
+                          durationMinutes: _durationMinutes,
                         ),
                       ),
                     );
-                    Future.delayed(const Duration(seconds: 1), () {
-                      if (context.mounted) {
-                        Navigator.of(
-                          context,
-                        ).popUntil((route) => route.isFirst);
-                      }
-                    });
                   },
                 ),
               ],

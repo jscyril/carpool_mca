@@ -43,6 +43,7 @@ class Ride(Base):
     status: Mapped[RideStatusEnum] = mapped_column(
         Enum(RideStatusEnum), default=RideStatusEnum.open
     )
+    pickup_otp: Mapped[str | None] = mapped_column(String(4), nullable=True)
 
     created_at: Mapped[str] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()

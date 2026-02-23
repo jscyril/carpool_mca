@@ -9,7 +9,9 @@ from pydantic import BaseModel
 
 class RideRequestCreate(BaseModel):
     """Request to join a ride. ride_id from path, passenger_id from auth."""
-    pass
+    pickup_lat: Optional[float] = None
+    pickup_lng: Optional[float] = None
+    pickup_address: Optional[str] = None
 
 
 class RideRequestRead(BaseModel):
@@ -18,8 +20,11 @@ class RideRequestRead(BaseModel):
     ride_id: UUID
     passenger_id: UUID
     request_status: str
+    pickup_lat: Optional[float] = None
+    pickup_lng: Optional[float] = None
+    pickup_address: Optional[str] = None
     requested_at: datetime
-    
+
     class Config:
         from_attributes = True
 

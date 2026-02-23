@@ -6,6 +6,7 @@ import 'personal_details.dart';
 import 'driver_details.dart';
 import '../home/home_screen.dart';
 import '../../main.dart';
+import '../../services/api_service.dart';
 
 // ============================================================================
 // Auth Flow Screen - Main Entry Point
@@ -27,24 +28,70 @@ class _AuthScreenState extends State<AuthScreen> {
   String _countryCode = '+91';
   String _phoneNumber = '';
 
+  // API tokens
+  String _sessionToken = '';
+  String _phoneVerifiedToken = '';
+
   void _navigateToStep(AuthStep step) {
     setState(() => _currentStep = step);
   }
 
-  void _onPhoneSubmit(String phone, String countryCode, bool isSignUp) {
-    setState(() {
-      _phoneNumber = phone;
-      _countryCode = countryCode;
-      _isSignUp = isSignUp;
-      _currentStep = AuthStep.otp;
-    });
+  void _onPhoneSubmit(String phone, String countryCode, bool isSignUp) async {
+    final fullPhone = '$countryCode$phone';
+
+    // Call the appropriate API endpoint
+    final ApiResponse response;
+    if (isSignUp) {
+      response = await AuthApiService.sendPhoneOtp(fullPhone);
+    } else {
+      response = await AuthApiService.loginSendOtp(fullPhone);
+    }
+
+    if (!mounted) return;
+
+    if (response.success && response.data != null) {
+      setState(() {
+        _phoneNumber = phone;
+        _countryCode = countryCode;
+        _isSignUp = isSignUp;
+        _sessionToken = response.data!['session_token'] ?? '';
+        _currentStep = AuthStep.otp;
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(response.error ?? 'Failed to send OTP'),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
   }
 
-  void _onOtpVerified() {
-    if (_isSignUp) {
+  void _onOtpVerified({
+    String? phoneVerifiedToken,
+    String? accessToken,
+    Map<String, dynamic>? userData,
+  }) async {
+    if (_isSignUp && phoneVerifiedToken != null) {
+      // Signup: OTP verified, now go to personal details with the verified token
+      setState(() {
+        _phoneVerifiedToken = phoneVerifiedToken;
+      });
       _navigateToStep(AuthStep.personalDetails);
-    } else {
-      // Login complete - navigate to home
+    } else if (accessToken != null) {
+      // Login: OTP verified, we have the access token — go home
+      await ApiService.saveAccessToken(accessToken);
+      await AuthService.setLoggedIn(true, phone: _phoneNumber);
+      if (userData != null) {
+        await AuthService.saveUserProfile(
+          name: userData['full_name'] ?? '',
+          email: userData['email'] ?? '',
+        );
+      }
       _onAuthComplete();
     }
   }
@@ -121,12 +168,27 @@ class _AuthScreenState extends State<AuthScreen> {
           key: const ValueKey('otp'),
           phoneNumber: _phoneNumber,
           countryCode: _countryCode,
+          sessionToken: _sessionToken,
+          isSignUp: _isSignUp,
           onVerified: _onOtpVerified,
+          onResendOtp: () async {
+            final fullPhone = '$_countryCode$_phoneNumber';
+            final response = _isSignUp
+                ? await AuthApiService.sendPhoneOtp(fullPhone)
+                : await AuthApiService.loginSendOtp(fullPhone);
+            if (response.success && response.data != null) {
+              setState(() {
+                _sessionToken = response.data!['session_token'] ?? '';
+              });
+            }
+            return response.success;
+          },
           onBack: () => _navigateToStep(AuthStep.loginSignup),
         );
       case AuthStep.personalDetails:
         return PersonalDetailsScreen(
           key: const ValueKey('personal_details'),
+          phoneVerifiedToken: _phoneVerifiedToken,
           onContinue: _onPersonalDetailsComplete,
           onBack: () => _navigateToStep(AuthStep.otp),
         );
