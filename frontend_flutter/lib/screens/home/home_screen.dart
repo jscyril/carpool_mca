@@ -5,6 +5,7 @@ import '../auth/common_widgets.dart';
 import '../profile/user_profile.dart';
 import '../settings/settings_screen.dart';
 import '../driver/driver_dashboard_screen.dart';
+import '../rides/activity_history_screen.dart';
 import '../../services/location_service.dart';
 import 'location_search_screen.dart';
 
@@ -553,15 +554,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         } else if (index == 2) {
-          // Activity — coming in Wave C
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Activity history coming soon!'),
-              backgroundColor: kPrimary,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+          // Activity history
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ActivityHistoryScreen(),
             ),
           );
         } else if (index == 3) {

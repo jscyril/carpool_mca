@@ -36,6 +36,7 @@ class _RideDirectionsScreenState extends State<RideDirectionsScreen> {
   void initState() {
     super.initState();
     _fetchRoute();
+    _fetchFareEstimate();
   }
 
   Future<void> _fetchRoute() async {
@@ -114,7 +115,7 @@ class _RideDirectionsScreenState extends State<RideDirectionsScreen> {
     );
     if (res.success && res.data != null && mounted) {
       setState(() {
-        _fareEstimate = (res.data['total_fare'] as num?)?.toDouble();
+        _fareEstimate = (res.data!['total_fare'] as num?)?.toDouble();
       });
     }
   }
@@ -193,6 +194,14 @@ class _RideDirectionsScreenState extends State<RideDirectionsScreen> {
                     label: _formatDuration(_durationMinutes!),
                     color: const Color(0xFF6366F1),
                   ),
+                  if (_fareEstimate != null) ...[
+                    const SizedBox(width: 10),
+                    _buildInfoChip(
+                      icon: Icons.currency_rupee,
+                      label: '₹${_fareEstimate!.round()}',
+                      color: const Color(0xFF10B981),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -356,6 +365,7 @@ class _RideDirectionsScreenState extends State<RideDirectionsScreen> {
                           toLatLng: widget.toLatLng,
                           distanceKm: _distanceKm,
                           durationMinutes: _durationMinutes,
+                          fareEstimate: _fareEstimate,
                         ),
                       ),
                     );

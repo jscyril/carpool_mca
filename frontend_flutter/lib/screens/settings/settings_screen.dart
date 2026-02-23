@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../auth/common_widgets.dart';
 import '../auth/login.dart';
 import '../../main.dart';
+import '../../services/api_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -11,6 +12,99 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  List<Map<String, dynamic>> _contacts = [];
+  bool _loadingContacts = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContacts();
+  }
+
+  Future<void> _loadContacts() async {
+    setState(() => _loadingContacts = true);
+    final res = await EmergencyContactApiService.listContacts();
+    if (res.success && res.data != null && mounted) {
+      final list = res.data!['items'] ?? res.data!['contacts'] ?? [];
+      if (list is List) {
+        setState(() => _contacts = List<Map<String, dynamic>>.from(list));
+      }
+    }
+    if (mounted) setState(() => _loadingContacts = false);
+  }
+
+  Future<void> _addContact() async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final relCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Add Emergency Contact',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: phoneCtrl,
+              decoration: const InputDecoration(labelText: 'Phone'),
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: relCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Relationship (e.g. Parent)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kPrimary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Add', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true &&
+        nameCtrl.text.isNotEmpty &&
+        phoneCtrl.text.isNotEmpty &&
+        relCtrl.text.isNotEmpty) {
+      await EmergencyContactApiService.addContact(
+        contactName: nameCtrl.text.trim(),
+        contactPhone: phoneCtrl.text.trim(),
+        relationship: relCtrl.text.trim(),
+      );
+      _loadContacts();
+    }
+  }
+
+  Future<void> _deleteContact(String contactId) async {
+    await EmergencyContactApiService.deleteContact(contactId);
+    _loadContacts();
+  }
+
   Future<void> _handleLogout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -91,6 +185,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   },
                 ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Safety Section
+            _buildSectionCard(
+              title: 'Safety',
+              icon: Icons.shield_outlined,
+              isDark: isDark,
+              children: [
+                _buildActionTile(
+                  icon: Icons.contact_phone_outlined,
+                  title: 'Emergency Contacts',
+                  color: Colors.red,
+                  onTap: _addContact,
+                ),
+                if (_loadingContacts)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: kPrimary,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ..._contacts.map(
+                    (c) => ListTile(
+                      leading: const Icon(
+                        Icons.person_outline,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                      title: Text(
+                        '${c['contact_name'] ?? 'Contact'}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${c['contact_phone'] ?? ''} • ${c['relationship'] ?? ''}',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          final id = c['contact_id']?.toString();
+                          if (id != null) _deleteContact(id);
+                        },
+                      ),
+                    ),
+                  ),
               ],
             ),
 

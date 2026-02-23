@@ -494,3 +494,129 @@ class FareApiService {
     return ApiService.get('/fare/campus-matrix', auth: false);
   }
 }
+
+// =============================================================================
+// RATING API SERVICE
+// =============================================================================
+
+/// Rating API methods matching backend /ratings endpoints.
+class RatingApiService {
+  /// POST /ratings/{rideId} — Submit a rating for a ride.
+  static Future<ApiResponse> submitRating({
+    required String rideId,
+    required String ratedUserId,
+    required int ratingValue,
+    String? comment,
+  }) async {
+    return ApiService.post(
+      '/ratings/$rideId',
+      auth: true,
+      body: {
+        'rated_user_id': ratedUserId,
+        'rating_value': ratingValue,
+        if (comment != null) 'comment': comment,
+      },
+    );
+  }
+
+  /// GET /ratings/ride/{rideId} — Get all ratings for a ride.
+  static Future<ApiResponse> getRideRatings(String rideId) async {
+    return ApiService.get('/ratings/ride/$rideId', auth: true);
+  }
+
+  /// GET /ratings/user/{userId} — Get aggregated rating summary for a user.
+  static Future<ApiResponse> getUserRatingSummary(String userId) async {
+    return ApiService.get('/ratings/user/$userId', auth: true);
+  }
+}
+
+// =============================================================================
+// EMERGENCY CONTACT API SERVICE
+// =============================================================================
+
+/// Emergency contact API methods matching backend /emergency-contacts endpoints.
+class EmergencyContactApiService {
+  /// GET /emergency-contacts — List user's emergency contacts.
+  static Future<ApiResponse> listContacts() async {
+    return ApiService.get('/emergency-contacts/', auth: true);
+  }
+
+  /// POST /emergency-contacts — Add a new emergency contact.
+  static Future<ApiResponse> addContact({
+    required String contactName,
+    required String contactPhone,
+    required String relationship,
+  }) async {
+    return ApiService.post(
+      '/emergency-contacts/',
+      auth: true,
+      body: {
+        'contact_name': contactName,
+        'contact_phone': contactPhone,
+        'relationship': relationship,
+      },
+    );
+  }
+
+  /// DELETE /emergency-contacts/{contactId} — Remove an emergency contact.
+  static Future<ApiResponse> deleteContact(String contactId) async {
+    return ApiService.delete('/emergency-contacts/$contactId', auth: true);
+  }
+}
+
+// =============================================================================
+// SOS API SERVICE
+// =============================================================================
+
+/// SOS API methods matching backend /sos endpoints.
+class SOSApiService {
+  /// POST /sos/trigger — Trigger an SOS alert.
+  static Future<ApiResponse> trigger({
+    required String rideId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    return ApiService.post(
+      '/sos/trigger',
+      auth: true,
+      body: {
+        'ride_id': rideId,
+        'location': {'latitude': latitude, 'longitude': longitude},
+      },
+    );
+  }
+
+  /// GET /sos/active — Get active SOS alerts.
+  static Future<ApiResponse> getActive() async {
+    return ApiService.get('/sos/active', auth: true);
+  }
+}
+
+// =============================================================================
+// REPORT API SERVICE
+// =============================================================================
+
+/// Report API methods matching backend /reports endpoints.
+class ReportApiService {
+  /// POST /reports — Submit a report against another user.
+  static Future<ApiResponse> submitReport({
+    required String rideId,
+    required String reportedUserId,
+    required String comment,
+  }) async {
+    return ApiService.post(
+      '/reports/',
+      auth: true,
+      body: {
+        'ride_id': rideId,
+        'reported_user_id': reportedUserId,
+        'comment': comment,
+      },
+    );
+  }
+
+  /// GET /reports/mine — List reports submitted by current user.
+  static Future<ApiResponse> getMyReports() async {
+    return ApiService.get('/reports/mine', auth: true);
+  }
+}

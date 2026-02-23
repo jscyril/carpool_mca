@@ -6,6 +6,8 @@ import 'package:latlong2/latlong.dart';
 import '../auth/common_widgets.dart';
 import '../../services/routing_service.dart';
 import '../../services/ride_simulation_service.dart';
+import '../../services/api_service.dart';
+import '../rides/rate_ride_screen.dart';
 
 /// Live tracking screen for an active ride.
 ///
@@ -21,6 +23,7 @@ class RideLiveScreen extends StatefulWidget {
   final LatLng toLatLng; // destination
   final double? distanceKm;
   final double? durationMinutes;
+  final double? fareEstimate;
 
   const RideLiveScreen({
     super.key,
@@ -30,6 +33,7 @@ class RideLiveScreen extends StatefulWidget {
     required this.toLatLng,
     this.distanceKm,
     this.durationMinutes,
+    this.fareEstimate,
   });
 
   @override
@@ -266,12 +270,59 @@ class _RideLiveScreenState extends State<RideLiveScreen>
       body: SafeArea(
         child: _isLoadingRoute
             ? _buildLoading()
-            : Column(
+            : Stack(
                 children: [
-                  _buildTopBar(cardColor),
-                  _buildStatusCard(cardColor),
-                  Expanded(child: _buildMap()),
-                  _buildBottomPanel(cardColor),
+                  Column(
+                    children: [
+                      _buildTopBar(cardColor),
+                      _buildStatusCard(cardColor),
+                      Expanded(child: _buildMap()),
+                      _buildBottomPanel(cardColor),
+                    ],
+                  ),
+                  // SOS button — visible during active ride phases
+                  if (_currentPhase == SimulationPhase.driverToPickup ||
+                      _currentPhase == SimulationPhase.riderToDestination)
+                    Positioned(
+                      right: 16,
+                      bottom: 180,
+                      child: GestureDetector(
+                        onLongPress: _triggerSOS,
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.red.withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.warning_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                              Text(
+                                'SOS',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
       ),
@@ -315,6 +366,68 @@ class _RideLiveScreenState extends State<RideLiveScreen>
         ],
       ),
     );
+  }
+
+  Future<void> _triggerSOS() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text(
+              'Emergency SOS',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: const Text(
+          'This will send an SOS alert with your current location. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Send SOS',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      final pos = _driverPosition ?? widget.fromLatLng;
+      await SOSApiService.trigger(
+        rideId: 'simulated-ride',
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('SOS alert sent! Stay safe.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildTopBar(Color cardColor) {
@@ -943,12 +1056,57 @@ class _RideLiveScreenState extends State<RideLiveScreen>
                 style: const TextStyle(color: kMuted, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
+              if (widget.fareEstimate != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.currency_rupee,
+                        color: Color(0xFF10B981),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '\u20b9${widget.fareEstimate!.round()}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: Color(0xFF10B981),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               AuthButton(
-                label: 'Done',
-                icon: Icons.home,
+                label: 'Rate Ride',
+                icon: Icons.star,
                 onPressed: () {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RateRideScreen(
+                        rideId: 'simulated-ride',
+                        isDriver: _isDriverView,
+                        ratedUserName: _isDriverView ? 'Rider' : 'Driver',
+                        ratedUserId: 'simulated-user',
+                      ),
+                    ),
+                  );
                 },
               ),
             ],
