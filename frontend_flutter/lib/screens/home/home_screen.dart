@@ -1,0 +1,593 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import '../auth/common_widgets.dart';
+import '../profile/user_profile.dart';
+import '../settings/settings_screen.dart';
+import '../driver/driver_dashboard_screen.dart';
+import '../rides/activity_history_screen.dart';
+import '../../services/location_service.dart';
+import 'location_search_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _selectedNavIndex = 0;
+  String _selectedQuickDestination = 'Campus';
+  LatLng? _currentLocation;
+
+  final List<String> _quickDestinations = ['Campus', 'Home', 'Library'];
+
+  // Default center: Bangalore
+  static const LatLng _defaultCenter = LatLng(12.9716, 77.5946);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentLocation();
+  }
+
+  Future<void> _loadCurrentLocation() async {
+    try {
+      final loc = await LocationService.getCurrentLocation();
+      if (mounted) {
+        setState(() => _currentLocation = loc);
+      }
+    } catch (_) {
+      // GPS not available — use default center
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Search bar and profile
+                      _buildSearchBar(),
+
+                      const SizedBox(height: 16),
+
+                      // Quick destination chips
+                      _buildQuickDestinations(),
+
+                      const SizedBox(height: 24),
+
+                      // Live Map section
+                      _buildMapSection(),
+
+                      const SizedBox(height: 24),
+
+                      // Ride options section
+                      _buildRideOptionsSection(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Bottom action section
+            _buildBottomSection(),
+
+            // Bottom navigation
+            _buildBottomNav(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LocationSearchScreen(),
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: kBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kCardBorder),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.search, color: kMuted),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Where to?',
+                    style: TextStyle(color: kMuted, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Profile avatar - taps navigate to user profile
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const UserProfileScreen()),
+          ),
+          child: Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: kPrimary.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: kPrimary.withValues(alpha: 0.3),
+                width: 2,
+              ),
+            ),
+            child: ClipOval(
+              child: Icon(Icons.person, color: kPrimary, size: 28),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickDestinations() {
+    return Row(
+      children: _quickDestinations.map((dest) {
+        final isSelected = _selectedQuickDestination == dest;
+        IconData icon;
+        switch (dest) {
+          case 'Campus':
+            icon = Icons.school;
+            break;
+          case 'Home':
+            icon = Icons.home;
+            break;
+          case 'Library':
+            icon = Icons.local_library;
+            break;
+          default:
+            icon = Icons.place;
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: GestureDetector(
+            onTap: () => setState(() => _selectedQuickDestination = dest),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? kPrimary.withValues(alpha: 0.1)
+                    : kBackground,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: isSelected ? kPrimary : kCardBorder),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 18, color: isSelected ? kPrimary : kMuted),
+                  const SizedBox(width: 6),
+                  Text(
+                    dest,
+                    style: TextStyle(
+                      color: isSelected ? kPrimary : kMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildMapSection() {
+    final center = _currentLocation ?? _defaultCenter;
+
+    return Container(
+      height: 180,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: kCardBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // Live OpenStreetMap
+          FlutterMap(
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: 14.0,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.none,
+              ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.uniride.carpool',
+              ),
+              // User location marker
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: center,
+                    width: 40,
+                    height: 40,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: kPrimary.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: kPrimary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: kPrimary.withValues(alpha: 0.4),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Location label overlay
+          Positioned(
+            left: 12,
+            top: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.my_location, size: 14, color: kPrimary),
+                  const SizedBox(width: 6),
+                  Text(
+                    _currentLocation != null ? 'Your Location' : 'Bangalore',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRideOptionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Choose a ride',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const Spacer(),
+            Text(
+              'Sorted by price',
+              style: TextStyle(color: kMuted, fontSize: 13),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        // UniPool option (Eco Choice)
+        _buildRideOption(
+          title: 'UniPool',
+          subtitle: '3 seats left • 4 min away',
+          price: '₹120',
+          originalPrice: '₹160',
+          isEcoChoice: true,
+          isSelected: true,
+        ),
+
+        const SizedBox(height: 12),
+
+        // Direct option
+        _buildRideOption(
+          title: 'Direct',
+          subtitle: 'Private • 6 min away',
+          price: '₹200',
+          isEcoChoice: false,
+          isSelected: false,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRideOption({
+    required String title,
+    required String subtitle,
+    required String price,
+    String? originalPrice,
+    required bool isEcoChoice,
+    required bool isSelected,
+  }) {
+    final cardColor = Theme.of(context).cardColor;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? kPrimary : kCardBorder,
+          width: isSelected ? 2 : 1,
+        ),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: kPrimary.withValues(alpha: 0.1),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isEcoChoice
+                  ? kPrimary.withValues(alpha: 0.1)
+                  : kBackground,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              isEcoChoice ? Icons.people : Icons.directions_car,
+              color: isEcoChoice ? kPrimary : kMuted,
+              size: 24,
+            ),
+          ),
+
+          const SizedBox(width: 14),
+
+          // Details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                    if (isEcoChoice) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: kPrimary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'ECO CHOICE',
+                          style: TextStyle(
+                            color: kPrimary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(subtitle, style: TextStyle(color: kMuted, fontSize: 13)),
+              ],
+            ),
+          ),
+
+          // Price
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                price,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
+              if (originalPrice != null)
+                Text(
+                  originalPrice,
+                  style: TextStyle(
+                    color: kMuted,
+                    fontSize: 13,
+                    decoration: TextDecoration.lineThrough,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomSection() {
+    final cardColor = Theme.of(context).cardColor;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      decoration: BoxDecoration(
+        color: cardColor,
+        border: Border(top: BorderSide(color: kCardBorder)),
+      ),
+      child: Column(
+        children: [
+          // Payment method
+          Row(
+            children: [
+              Icon(Icons.credit_card, color: kMuted, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Visa •••• 4242',
+                style: TextStyle(color: kMuted, fontWeight: FontWeight.w500),
+              ),
+              Icon(Icons.keyboard_arrow_down, color: kMuted, size: 20),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: kBackground,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.qr_code, color: kMuted, size: 20),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Request button
+          AuthButton(
+            label: 'Request UniPool',
+            icon: Icons.arrow_forward,
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Looking for drivers...'),
+                  backgroundColor: kPrimary,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomNav() {
+    final cardColor = Theme.of(context).cardColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: cardColor,
+        border: Border(top: BorderSide(color: kCardBorder)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildNavItem(0, Icons.directions_car, 'Rider'),
+          _buildNavItem(1, Icons.local_taxi, 'Driver'),
+          _buildNavItem(2, Icons.receipt_long, 'Activity'),
+          _buildNavItem(3, Icons.settings_outlined, 'Settings'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final isSelected = _selectedNavIndex == index;
+    return GestureDetector(
+      onTap: () {
+        if (index == 1) {
+          // Navigate to Driver Dashboard
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const DriverDashboardScreen(),
+            ),
+          );
+        } else if (index == 2) {
+          // Activity history
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ActivityHistoryScreen(),
+            ),
+          );
+        } else if (index == 3) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+          );
+        } else {
+          setState(() => _selectedNavIndex = index);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: isSelected ? kPrimary : kMuted, size: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? kPrimary : kMuted,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
