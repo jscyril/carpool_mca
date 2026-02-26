@@ -163,12 +163,7 @@ class AuthService {
   }
 
   static Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_isLoggedInKey);
-    await prefs.remove(_userPhoneKey);
-    await prefs.remove(_userNameKey);
-    await prefs.remove(_userEmailKey);
-    await prefs.remove(_userDobKey);
-    await prefs.remove(_userAddressKey);
+    // Clear all stored tokens (access + refresh) and preferences
+    await ApiService.clearAll();
   }
 }

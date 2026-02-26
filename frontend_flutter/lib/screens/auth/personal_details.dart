@@ -46,8 +46,8 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
   }
 
   bool get _isFormValid {
-    return _fullNameCtrl.text.trim().isNotEmpty && _dateOfBirth != null;
-    // Email and address are optional at registration
+    return _fullNameCtrl.text.trim().isNotEmpty;
+    // Only full_name required; gender defaults to 'male'
   }
 
   void _validateEmail() {
@@ -152,18 +152,20 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
     if (!mounted) return;
 
     if (response.success && response.data != null) {
-      // Save access token
+      // Save both tokens for persistent login
       final accessToken = response.data!['access_token'] as String?;
+      final refreshToken = response.data!['refresh_token'] as String?;
       if (accessToken != null) {
-        await ApiService.saveAccessToken(accessToken);
+        await ApiService.saveTokens(
+          accessToken: accessToken,
+          refreshToken: refreshToken ?? '',
+        );
       }
 
       // Save user profile data to SharedPreferences
       await AuthService.saveUserProfile(
         name: _fullNameCtrl.text.trim(),
         email: _emailCtrl.text.trim(),
-        dob: _formattedDob,
-        address: _addressCtrl.text.trim(),
       );
       await AuthService.setLoggedIn(true);
 

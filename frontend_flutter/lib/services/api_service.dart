@@ -4,35 +4,106 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Base API service providing HTTP methods with auth headers and error handling.
+/// Supports refresh token rotation for persistent login.
 class ApiService {
   // Android emulator uses 10.0.2.2 to reach host localhost
   // For physical device, use your machine's IP address
+  // For Render deployment, override via UNIRIDE_API_URL environment or simply change below.
   static String get baseUrl {
+    // Android emulator (10.0.2.2) or local IP (10.4.216.181) for physical devices
     if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8000';
+      // return 'http://10.0.2.2:8000'; // uncomment if using official Android Emulator
+      return 'http://10.4.216.181:8000';
     }
-    return 'http://localhost:8000';
+    return 'http://10.4.216.181:8000'; // For iOS physical/simulators
   }
 
-  /// Get stored access token from SharedPreferences.
+  // ----------------------------------------------------------------
+  // Token storage helpers
+  // ----------------------------------------------------------------
+
   static Future<String?> getAccessToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('access_token');
   }
 
-  /// Save access token to SharedPreferences.
   static Future<void> saveAccessToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', token);
   }
 
-  /// Clear access token (for logout).
-  static Future<void> clearAccessToken() async {
+  static Future<String?> getRefreshToken() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('access_token');
+    return prefs.getString('refresh_token');
   }
 
-  /// Build common headers with optional auth.
+  static Future<void> saveRefreshToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('refresh_token', token);
+  }
+
+  /// Save both tokens at once (used after login / register).
+  static Future<void> saveTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('access_token', accessToken);
+    await prefs.setString('refresh_token', refreshToken);
+  }
+
+  /// Clear all stored tokens (logout).
+  static Future<void> clearAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('access_token');
+    await prefs.remove('refresh_token');
+    await prefs.remove('is_logged_in');
+    await prefs.remove('user_phone');
+    await prefs.remove('user_name');
+    await prefs.remove('user_email');
+  }
+
+  /// Legacy alias for clearAccessToken.
+  static Future<void> clearAccessToken() async => clearAll();
+
+  // ----------------------------------------------------------------
+  // Token refresh
+  // ----------------------------------------------------------------
+
+  /// Exchange the stored refresh token for a new access + refresh token pair.
+  /// Returns true on success, false if refresh token is invalid/expired.
+  /// On failure, clears all tokens so the user is redirected to login.
+  static Future<bool> refreshAccessToken() async {
+    final refreshToken = await getRefreshToken();
+    if (refreshToken == null) return false;
+
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/auth/refresh'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh_token': refreshToken}),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        await saveTokens(
+          accessToken: data['access_token'] as String,
+          refreshToken: data['refresh_token'] as String,
+        );
+        return true;
+      } else {
+        // Refresh token is invalid or expired — force re-login
+        await clearAll();
+        return false;
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Build headers
+  // ----------------------------------------------------------------
+
   static Future<Map<String, String>> _headers({bool auth = false}) async {
     final headers = <String, String>{
       'Content-Type': 'application/json',

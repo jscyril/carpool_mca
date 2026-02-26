@@ -12,6 +12,7 @@ class OtpVerificationScreen extends StatefulWidget {
   final void Function({
     String? phoneVerifiedToken,
     String? accessToken,
+    String? refreshToken,
     Map<String, dynamic>? userData,
   })?
   onVerified;
@@ -130,10 +131,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           phoneVerifiedToken: response.data!['phone_verified_token'],
         );
       } else {
-        // Login: pass accessToken and user data
+        // Login: pass accessToken, refreshToken and user data
         final userData = response.data!['user'] as Map<String, dynamic>?;
         widget.onVerified?.call(
           accessToken: response.data!['access_token'],
+          refreshToken: response.data!['refresh_token'],
           userData: userData,
         );
       }

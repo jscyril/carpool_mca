@@ -1,6 +1,7 @@
 """
 College Carpool API - Main Application Entry Point
 """
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,6 +9,7 @@ from core.config import get_settings
 # Import models to ensure they are registered with SQLAlchemy
 from db.models import users, vehicles, rides, ride_requests, ride_participants, ride_history, driver_profiles
 from db.models import identity_verifications, driver_verifications, saved_addresses, college_students
+from db.models import refresh_tokens  # Required for refresh token auth
 from routers import auth, users as users_router, vehicles as vehicles_router, rides as rides_router
 from routers import verification as verification_router
 from routers import addresses as addresses_router
@@ -30,10 +32,21 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS Middleware
+# ---------------------------------------------------------------------------
+# CORS — restrict to configured origins in production
+# Set ALLOWED_ORIGINS env var as comma-separated list, e.g.:
+#   ALLOWED_ORIGINS=https://myapp.onrender.com,http://localhost:3000
+# Defaults to wildcard for local development only.
+# ---------------------------------------------------------------------------
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "*")
+if _raw_origins == "*":
+    allowed_origins = ["*"]
+else:
+    allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
