@@ -12,18 +12,38 @@ import '../rides/rate_ride_screen.dart';
 /// Live tracking screen for an active ride.
 ///
 /// Simulates driver movement along the OSRM route in two phases:
-///   Phase 1: Driver heading to pickup (rider sees driver approaching)
-///   Phase 2: Pickup → Destination (both see trip progress)
+///   Phase 1: Driver heading to pickup(s) (UniPool multi-stop)
+///   Phase 2: All picked up → Destination
 ///
 /// A temporary FAB toggles between rider and driver view.
+
+/// Represents one co-passenger in a pool ride.
+class PoolPassenger {
+  final String name;
+  final LatLng pickupPoint;
+  final String otp;
+  bool pickedUp;
+
+  PoolPassenger({
+    required this.name,
+    required this.pickupPoint,
+    required this.otp,
+    this.pickedUp = false,
+  });
+}
+
 class RideLiveScreen extends StatefulWidget {
   final String fromLocation;
   final String toLocation;
-  final LatLng fromLatLng; // pickup
+  final LatLng fromLatLng; // your pickup
   final LatLng toLatLng; // destination
   final double? distanceKm;
   final double? durationMinutes;
   final double? fareEstimate;
+  // Optional real ride context (if null, purely simulated)
+  final String? rideId;
+  final String? driverUserId;
+  final String? driverName;
 
   const RideLiveScreen({
     super.key,
@@ -34,6 +54,9 @@ class RideLiveScreen extends StatefulWidget {
     this.distanceKm,
     this.durationMinutes,
     this.fareEstimate,
+    this.rideId,
+    this.driverUserId,
+    this.driverName,
   });
 
   @override
@@ -47,6 +70,10 @@ class _RideLiveScreenState extends State<RideLiveScreen>
   // View mode
   bool _isDriverView = false;
 
+  // Pool passengers (simulated co-riders for UniPool)
+  late List<PoolPassenger> _poolPassengers;
+  int _currentPassengerIdx = 0; // which pool stop we're heading to
+
   // Simulation
   RideSimulationService? _simulation;
   LatLng? _driverPosition;
@@ -58,9 +85,9 @@ class _RideLiveScreenState extends State<RideLiveScreen>
   List<LatLng> _pickupToDestRoute = [];
   bool _isLoadingRoute = true;
 
-  // OTP
-  final String _pickupOtp = _generateOtp();
+  // OTP — for current stop
   final TextEditingController _otpController = TextEditingController();
+  final String _selfPickupOtp = _generateOtp();
 
   // Animation
   late AnimationController _pulseController;
@@ -70,9 +97,29 @@ class _RideLiveScreenState extends State<RideLiveScreen>
     return '${Random().nextInt(9000) + 1000}';
   }
 
+  static List<PoolPassenger> _generatePassengers(LatLng near) {
+    final rng = Random();
+    final names = ['Priya S.', 'Arjun M.', 'Neha R.', 'Rahul K.', 'Sneha P.'];
+    names.shuffle();
+    final count = rng.nextInt(2) + 2; // 2 or 3
+    return List.generate(count, (i) {
+      final offsetLat = (rng.nextDouble() - 0.5) * 0.008;
+      final offsetLng = (rng.nextDouble() - 0.5) * 0.008;
+      return PoolPassenger(
+        name: names[i],
+        pickupPoint: LatLng(
+          near.latitude + offsetLat,
+          near.longitude + offsetLng,
+        ),
+        otp: '${rng.nextInt(9000) + 1000}',
+      );
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    _poolPassengers = _generatePassengers(widget.fromLatLng);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -93,19 +140,21 @@ class _RideLiveScreenState extends State<RideLiveScreen>
   }
 
   Future<void> _initSimulation() async {
-    // Simulate a driver starting position (offset from pickup)
+    // First pool stop: head to first co-passenger's location, then to user's pickup
+    final firstStop = _poolPassengers.isNotEmpty
+        ? _poolPassengers[0].pickupPoint
+        : widget.fromLatLng;
+
+    // Driver starts offset from the first stop
     final driverStart = LatLng(
-      widget.fromLatLng.latitude + 0.015 + Random().nextDouble() * 0.01,
-      widget.fromLatLng.longitude - 0.01 + Random().nextDouble() * 0.01,
+      firstStop.latitude + 0.015 + Random().nextDouble() * 0.01,
+      firstStop.longitude - 0.01 + Random().nextDouble() * 0.01,
     );
 
     try {
-      // Fetch route: driver → pickup
-      final toPickup = await RoutingService.getRoute(
-        driverStart,
-        widget.fromLatLng,
-      );
-      // Fetch route: pickup → destination
+      // Route: driver → first pool stop
+      final toPickup = await RoutingService.getRoute(driverStart, firstStop);
+      // Route: user pickup → destination (after all pool stops)
       final toDest = await RoutingService.getRoute(
         widget.fromLatLng,
         widget.toLatLng,
@@ -120,7 +169,6 @@ class _RideLiveScreenState extends State<RideLiveScreen>
         _isLoadingRoute = false;
       });
 
-      // Start phase 1 simulation
       _startPhase1();
       _fitMapToRoute(_driverToPickupRoute);
     } catch (e) {
@@ -137,6 +185,11 @@ class _RideLiveScreenState extends State<RideLiveScreen>
   }
 
   void _startPhase1() {
+    // Show whose stop we're heading to
+    final destination = _currentPassengerIdx < _poolPassengers.length
+        ? _poolPassengers[_currentPassengerIdx].pickupPoint
+        : widget.fromLatLng;
+
     _simulation = RideSimulationService(
       routePoints: List.from(_driverToPickupRoute),
       speedKmh: 50.0,
@@ -153,7 +206,7 @@ class _RideLiveScreenState extends State<RideLiveScreen>
         if (mounted) {
           setState(() {
             _currentPhase = SimulationPhase.pickupReached;
-            _driverPosition = widget.fromLatLng;
+            _driverPosition = destination;
           });
         }
       },
@@ -194,10 +247,27 @@ class _RideLiveScreenState extends State<RideLiveScreen>
   }
 
   void _verifyOtp() {
-    if (_otpController.text.trim() == _pickupOtp) {
+    final expected = _currentPassengerIdx < _poolPassengers.length
+        ? _poolPassengers[_currentPassengerIdx].otp
+        : _selfPickupOtp;
+
+    if (_otpController.text.trim() == expected) {
+      _otpController.clear();
+
+      if (_currentPassengerIdx < _poolPassengers.length) {
+        // Mark this pool passenger as picked up
+        setState(() {
+          _poolPassengers[_currentPassengerIdx].pickedUp = true;
+        });
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('✓ OTP Verified! Rider picked up.'),
+          content: Text(
+            _currentPassengerIdx < _poolPassengers.length
+                ? '✓ ${_poolPassengers[_currentPassengerIdx].name} picked up!'
+                : '✓ OTP Verified! Rider picked up.',
+          ),
           backgroundColor: kPrimary,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -205,8 +275,32 @@ class _RideLiveScreenState extends State<RideLiveScreen>
           ),
         ),
       );
-      // Start phase 2 after short delay
-      Future.delayed(const Duration(milliseconds: 800), _startPhase2);
+
+      // Move to next pool stop or begin route to destination
+      final nextIdx = _currentPassengerIdx + 1;
+      if (nextIdx < _poolPassengers.length) {
+        // Still more pool passengers to pick up — simulate drive to next stop
+        setState(() {
+          _currentPassengerIdx = nextIdx;
+          _currentPhase = SimulationPhase.driverToPickup;
+          _progress = 0.0;
+        });
+        // Use approx route between consecutive stops (reuse phase1 route reversed for simplicity)
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (mounted) _startNextPoolLeg();
+        });
+      } else if (nextIdx == _poolPassengers.length) {
+        // All pool stops done — now pick up the main rider (self)
+        setState(() {
+          _currentPassengerIdx = nextIdx;
+          _currentPhase = SimulationPhase.driverToPickup;
+          _progress = 0.0;
+        });
+        Future.delayed(const Duration(milliseconds: 600), _startMainPickupLeg);
+      } else {
+        // Self picked up — start ride to destination
+        Future.delayed(const Duration(milliseconds: 800), _startPhase2);
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -218,6 +312,36 @@ class _RideLiveScreenState extends State<RideLiveScreen>
           ),
         ),
       );
+    }
+  }
+
+  void _startNextPoolLeg() async {
+    // Brief simulated route from current stop to next stop
+    final from = _poolPassengers[_currentPassengerIdx - 1].pickupPoint;
+    final to = _poolPassengers[_currentPassengerIdx].pickupPoint;
+    try {
+      final route = await RoutingService.getRoute(from, to);
+      if (!mounted) return;
+      setState(() => _driverToPickupRoute = route.points);
+      _startPhase1();
+    } catch (_) {
+      // fallback: just mark arrived
+      if (mounted)
+        setState(() => _currentPhase = SimulationPhase.pickupReached);
+    }
+  }
+
+  void _startMainPickupLeg() async {
+    // Drive to user's actual pickup from last pool stop
+    final from = _poolPassengers.last.pickupPoint;
+    try {
+      final route = await RoutingService.getRoute(from, widget.fromLatLng);
+      if (!mounted) return;
+      setState(() => _driverToPickupRoute = route.points);
+      _startPhase1();
+    } catch (_) {
+      if (mounted)
+        setState(() => _currentPhase = SimulationPhase.pickupReached);
     }
   }
 
@@ -280,14 +404,15 @@ class _RideLiveScreenState extends State<RideLiveScreen>
                       _buildBottomPanel(cardColor),
                     ],
                   ),
-                  // SOS button — visible during active ride phases
+                  // SOS button — tap (with confirmation) during active ride phases
                   if (_currentPhase == SimulationPhase.driverToPickup ||
                       _currentPhase == SimulationPhase.riderToDestination)
                     Positioned(
                       right: 16,
                       bottom: 180,
                       child: GestureDetector(
-                        onLongPress: _triggerSOS,
+                        onTap: _triggerSOS, // tappable
+                        onLongPress: _triggerSOS, // long-press fallback
                         child: Container(
                           width: 56,
                           height: 56,
@@ -410,22 +535,42 @@ class _RideLiveScreenState extends State<RideLiveScreen>
 
     if (confirm == true && mounted) {
       final pos = _driverPosition ?? widget.fromLatLng;
-      await SOSApiService.trigger(
-        rideId: 'simulated-ride',
-        latitude: pos.latitude,
-        longitude: pos.longitude,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('SOS alert sent! Stay safe.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
+      final realRideId = widget.rideId;
+
+      if (realRideId != null) {
+        // Real ride — call the API
+        final res = await SOSApiService.trigger(
+          rideId: realRideId,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                res.success
+                    ? 'SOS alert sent! Emergency contacts notified.'
+                    : 'SOS failed: ${res.error ?? 'Unknown error'}',
+              ),
+              backgroundColor: res.success ? Colors.red : Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+        }
+      } else {
+        // Simulation mode — skip API, just confirm
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🚨 SOS noted — stay safe! (Simulation mode)'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     }
   }
@@ -697,7 +842,15 @@ class _RideLiveScreenState extends State<RideLiveScreen>
             : _buildRiderWaitingForDriver();
 
       case SimulationPhase.pickupReached:
-        return _isDriverView ? _buildDriverOtpEntry() : _buildRiderShowOtp();
+        if (_isDriverView) {
+          return _buildDriverOtpEntry();
+        } else {
+          // Only show self OTP when driver is at the rider's own pickup point
+          final isOwnStop = _currentPassengerIdx >= _poolPassengers.length;
+          return isOwnStop
+              ? _buildRiderShowOtp()
+              : _buildRiderWaitingForPoolPickup();
+        }
 
       case SimulationPhase.riderToDestination:
         return _isDriverView
@@ -792,13 +945,68 @@ class _RideLiveScreenState extends State<RideLiveScreen>
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  _pickupOtp,
+                  _selfPickupOtp,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 8,
                   ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Shown to the rider while the driver is picking up a co-passenger (not their stop).
+  Widget _buildRiderWaitingForPoolPickup() {
+    final passenger = _currentPassengerIdx < _poolPassengers.length
+        ? _poolPassengers[_currentPassengerIdx]
+        : null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.people, color: Colors.amber, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      passenger != null
+                          ? 'Picking up ${passenger.name}'
+                          : 'Picking up a co-rider',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Stop ${_currentPassengerIdx + 1} of '
+                      '${_poolPassengers.length + 1}  •  Please wait',
+                      style: const TextStyle(color: kMuted, fontSize: 12),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -914,13 +1122,56 @@ class _RideLiveScreenState extends State<RideLiveScreen>
   }
 
   Widget _buildDriverOtpEntry() {
+    final isPoolStop = _currentPassengerIdx < _poolPassengers.length;
+    final passengerName = isPoolStop
+        ? _poolPassengers[_currentPassengerIdx].name
+        : 'Rider';
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          'Enter rider\'s OTP to confirm pickup',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        Text(
+          isPoolStop
+              ? "Enter $passengerName's OTP"
+              : "Enter rider's OTP to confirm pickup",
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
+        // Simulation hint: pool passengers are virtual so show their OTP
+        if (isPoolStop) ...[
+          const SizedBox(height: 6),
+          GestureDetector(
+            onTap: () {
+              final otp = _poolPassengers[_currentPassengerIdx].otp;
+              _otpController.text = otp;
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.lightbulb_outline,
+                    color: Colors.amber,
+                    size: 13,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Sim OTP: ${_poolPassengers[_currentPassengerIdx].otp}  (tap to fill)',
+                    style: const TextStyle(
+                      color: Colors.amber,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         Row(
           children: [
@@ -1029,6 +1280,7 @@ class _RideLiveScreenState extends State<RideLiveScreen>
   }
 
   Widget _buildRideComplete() {
+    final pickedUpCount = _poolPassengers.where((p) => p.pickedUp).length;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1056,6 +1308,17 @@ class _RideLiveScreenState extends State<RideLiveScreen>
                 style: const TextStyle(color: kMuted, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
+              if (pickedUpCount > 0) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Shared with $pickedUpCount co-${pickedUpCount == 1 ? 'rider' : 'riders'}',
+                  style: TextStyle(
+                    color: kPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               if (widget.fareEstimate != null) ...[
                 const SizedBox(height: 12),
                 Container(
@@ -1087,6 +1350,14 @@ class _RideLiveScreenState extends State<RideLiveScreen>
                           color: Color(0xFF10B981),
                         ),
                       ),
+                      if (pickedUpCount > 0)
+                        Text(
+                          ' split',
+                          style: const TextStyle(
+                            color: Color(0xFF10B981),
+                            fontSize: 12,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1096,17 +1367,35 @@ class _RideLiveScreenState extends State<RideLiveScreen>
                 label: 'Rate Ride',
                 icon: Icons.star,
                 onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => RateRideScreen(
-                        rideId: 'simulated-ride',
-                        isDriver: _isDriverView,
-                        ratedUserName: _isDriverView ? 'Rider' : 'Driver',
-                        ratedUserId: 'simulated-user',
+                  final hasRealRide =
+                      widget.rideId != null && widget.driverUserId != null;
+                  if (hasRealRide) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => RateRideScreen(
+                          rideId: widget.rideId!,
+                          isDriver: _isDriverView,
+                          ratedUserName: widget.driverName ?? 'Driver',
+                          ratedUserId: widget.driverUserId!,
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  } else {
+                    // Simulation mode — just thank the user
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text(
+                          'Thanks for riding! (Rating skipped in simulation)',
+                        ),
+                        backgroundColor: kPrimary,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    );
+                  }
                 },
               ),
             ],

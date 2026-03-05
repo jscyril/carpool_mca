@@ -1,0 +1,7 @@
+/// Example config file — copy this to config.dart and fill in your tunnel URL.
+/// config.dart is gitignored so each developer maintains their own.
+///
+/// Usage:
+///   cp lib/config.dart.example lib/config.dart
+///   # then edit config.dart with your current Pinggy/ngrok URL
+const String kBaseUrl = 'https://your-tunnel-url.a.free.pinggy.link';

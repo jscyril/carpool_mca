@@ -2,17 +2,18 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config.dart';
+
+/// Resolves the backend base URL from config.dart.
+/// On Android emulator you'd normally use 10.0.2.2, but when tunnelling
+/// (Pinggy / ngrok) the same public URL works on all platforms.
+String _resolveBaseUrl() => kBaseUrl;
 
 /// Base API service providing HTTP methods with auth headers and error handling.
 class ApiService {
   // Android emulator uses 10.0.2.2 to reach host localhost
   // For physical device, use your machine's IP address
-  static String get baseUrl {
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8000';
-    }
-    return 'http://localhost:8000';
-  }
+  static final String baseUrl = _resolveBaseUrl();
 
   /// Get stored access token from SharedPreferences.
   static Future<String?> getAccessToken() async {

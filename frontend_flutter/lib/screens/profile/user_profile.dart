@@ -133,6 +133,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   // ================= UI BUILD =================
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(

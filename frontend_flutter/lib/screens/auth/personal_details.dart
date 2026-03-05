@@ -40,11 +40,6 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
     super.dispose();
   }
 
-  bool get _isEmailValid {
-    final email = _emailCtrl.text.trim().toLowerCase();
-    return email.isNotEmpty && email.endsWith('@christuniversity.in');
-  }
-
   bool get _isFormValid {
     return _fullNameCtrl.text.trim().isNotEmpty && _dateOfBirth != null;
     // Email and address are optional at registration

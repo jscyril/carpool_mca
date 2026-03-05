@@ -50,55 +50,77 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
     return Scaffold(
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: kPrimary))
-            : RefreshIndicator(
-                onRefresh: _loadData,
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    // Header
-                    const Text(
-                      'Driver Dashboard',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _driverProfile != null
-                          ? 'Vehicle: ${_driverProfile!['vehicle_number'] ?? 'Not set'}'
-                          : 'Set up your driver profile first',
-                      style: const TextStyle(color: kMuted, fontSize: 14),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Quick stats
-                    _buildStatsRow(cardColor),
-                    const SizedBox(height: 20),
-
-                    // Active rides
-                    const Text(
-                      'Your Rides',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    if (_myRides.isEmpty)
-                      _buildEmptyState(cardColor)
-                    else
-                      ..._myRides.map(
-                        (ride) => _buildRideCard(ride, cardColor),
-                      ),
-                  ],
-                ),
+      appBar: AppBar(
+        leading: const BackButton(),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Driver Dashboard',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            if (_driverProfile != null)
+              Text(
+                'Vehicle: ${_driverProfile!['vehicle_number'] ?? 'Not set'}',
+                style: const TextStyle(color: kMuted, fontSize: 11),
               ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: _isLoading ? null : _loadData,
+          ),
+        ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Create ride from location search'),
+              backgroundColor: kPrimary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+        },
+        backgroundColor: kPrimary,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'New Ride',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: kPrimary))
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // Quick stats
+                  _buildStatsRow(cardColor),
+                  const SizedBox(height: 20),
+
+                  // Active rides
+                  const Text(
+                    'Your Rides',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (_myRides.isEmpty)
+                    _buildEmptyState(cardColor)
+                  else
+                    ..._myRides.map((ride) => _buildRideCard(ride, cardColor)),
+
+                  const SizedBox(height: 80), // space for FAB
+                ],
+              ),
+            ),
     );
   }
 

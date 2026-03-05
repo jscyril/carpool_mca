@@ -20,6 +20,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedNavIndex = 0;
   String _selectedQuickDestination = 'Campus';
   LatLng? _currentLocation;
+  bool _isLocating = true;
+  final MapController _mapController = MapController();
 
   final List<String> _quickDestinations = ['Campus', 'Home', 'Library'];
 
@@ -36,10 +38,16 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final loc = await LocationService.getCurrentLocation();
       if (mounted) {
-        setState(() => _currentLocation = loc);
+        setState(() {
+          _currentLocation = loc;
+          _isLocating = false;
+        });
+        // Animate map to real GPS position
+        _mapController.move(loc, 15.0);
       }
     } catch (_) {
       // GPS not available — use default center
+      if (mounted) setState(() => _isLocating = false);
     }
   }
 
@@ -216,6 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           // Live OpenStreetMap
           FlutterMap(
+            mapController: _mapController,
             options: MapOptions(
               initialCenter: center,
               initialZoom: 14.0,
@@ -284,16 +293,36 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.my_location, size: 14, color: kPrimary),
-                  const SizedBox(width: 6),
-                  Text(
-                    _currentLocation != null ? 'Your Location' : 'Bangalore',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: Colors.black87,
+                  if (_isLocating) ...[
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: kPrimary,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Locating...',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ] else ...[
+                    Icon(Icons.my_location, size: 14, color: kPrimary),
+                    const SizedBox(width: 6),
+                    Text(
+                      _currentLocation != null ? 'Your Location' : 'Bangalore',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -304,161 +333,54 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRideOptionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Text(
-              'Choose a ride',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
-            const Spacer(),
-            Text(
-              'Sorted by price',
-              style: TextStyle(color: kMuted, fontSize: 13),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 16),
-
-        // UniPool option (Eco Choice)
-        _buildRideOption(
-          title: 'UniPool',
-          subtitle: '3 seats left • 4 min away',
-          price: '₹120',
-          originalPrice: '₹160',
-          isEcoChoice: true,
-          isSelected: true,
-        ),
-
-        const SizedBox(height: 12),
-
-        // Direct option
-        _buildRideOption(
-          title: 'Direct',
-          subtitle: 'Private • 6 min away',
-          price: '₹200',
-          isEcoChoice: false,
-          isSelected: false,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRideOption({
-    required String title,
-    required String subtitle,
-    required String price,
-    String? originalPrice,
-    required bool isEcoChoice,
-    required bool isSelected,
-  }) {
-    final cardColor = Theme.of(context).cardColor;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cardColor,
+        color: kPrimary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected ? kPrimary : kCardBorder,
-          width: isSelected ? 2 : 1,
-        ),
-        boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: kPrimary.withValues(alpha: 0.1),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null,
+        border: Border.all(color: kPrimary.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
-          // Icon
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isEcoChoice
-                  ? kPrimary.withValues(alpha: 0.1)
-                  : kBackground,
+              color: kPrimary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              isEcoChoice ? Icons.people : Icons.directions_car,
-              color: isEcoChoice ? kPrimary : kMuted,
-              size: 24,
-            ),
+            child: const Icon(Icons.people, color: kPrimary, size: 22),
           ),
-
           const SizedBox(width: 14),
-
-          // Details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                    if (isEcoChoice) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: kPrimary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'ECO CHOICE',
-                          style: TextStyle(
-                            color: kPrimary,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                const Text(
+                  'UniPool — Campus Pooling',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                 ),
-                const SizedBox(height: 4),
-                Text(subtitle, style: TextStyle(color: kMuted, fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(
+                  'Share rides with verified students · Split fares',
+                  style: TextStyle(color: kMuted, fontSize: 12),
+                ),
               ],
             ),
           ),
-
-          // Price
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                price,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: kPrimary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'ECO',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
               ),
-              if (originalPrice != null)
-                Text(
-                  originalPrice,
-                  style: TextStyle(
-                    color: kMuted,
-                    fontSize: 13,
-                    decoration: TextDecoration.lineThrough,
-                  ),
-                ),
-            ],
+            ),
           ),
         ],
       ),
@@ -473,50 +395,17 @@ class _HomeScreenState extends State<HomeScreen> {
         color: cardColor,
         border: Border(top: BorderSide(color: kCardBorder)),
       ),
-      child: Column(
-        children: [
-          // Payment method
-          Row(
-            children: [
-              Icon(Icons.credit_card, color: kMuted, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Visa •••• 4242',
-                style: TextStyle(color: kMuted, fontWeight: FontWeight.w500),
-              ),
-              Icon(Icons.keyboard_arrow_down, color: kMuted, size: 20),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: kBackground,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(Icons.qr_code, color: kMuted, size: 20),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Request button
-          AuthButton(
-            label: 'Request UniPool',
-            icon: Icons.arrow_forward,
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Looking for drivers...'),
-                  backgroundColor: kPrimary,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
+      child: AuthButton(
+        label: 'Find a UniPool Ride',
+        icon: Icons.search,
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const LocationSearchScreen(),
+            ),
+          );
+        },
       ),
     );
   }
