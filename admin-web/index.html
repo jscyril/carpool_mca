@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UniRide Admin</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- LOGIN PAGE -->
+  <div id="login-page" class="page active">
+    <div class="login-container">
+      <div class="login-brand">
+        <div class="brand-logo">🚗</div>
+        <h1>UniRide Admin</h1>
+        <p>Christ University Carpooling Platform</p>
+      </div>
+
+      <div class="login-card">
+        <h2>Sign In</h2>
+        <p class="login-sub">Enter your registered admin phone number</p>
+
+        <!-- Step 1: Phone -->
+        <div id="step-phone">
+          <div class="form-group">
+            <label>Phone Number</label>
+            <div class="phone-input">
+              <span class="country-code">+91</span>
+              <input type="tel" id="phone-input" placeholder="9876543210" maxlength="10" />
+            </div>
+          </div>
+          <button class="btn-primary" id="send-otp-btn" onclick="sendOtp()">Send OTP</button>
+          <p id="phone-error" class="error-msg hidden"></p>
+        </div>
+
+        <!-- Step 2: OTP -->
+        <div id="step-otp" class="hidden">
+          <p class="otp-hint">Enter the 6-digit OTP sent to <strong id="otp-phone-display"></strong></p>
+          <div class="form-group">
+            <label>OTP</label>
+            <input type="text" id="otp-input" placeholder="123456" maxlength="6" inputmode="numeric" />
+          </div>
+          <button class="btn-primary" id="verify-otp-btn" onclick="verifyOtp()">Verify & Login</button>
+          <button class="btn-ghost" onclick="backToPhone()">← Change Number</button>
+          <p id="otp-error" class="error-msg hidden"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN DASHBOARD -->
+  <div id="main-page" class="page hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo small">🚗</div>
+        <span>UniRide<br /><small>Admin</small></span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" onclick="showSection('dashboard', this)">
+          <span class="icon">📊</span> Dashboard
+        </a>
+        <a href="#" class="nav-item" onclick="showSection('users', this)">
+          <span class="icon">👥</span> Users
+        </a>
+        <a href="#" class="nav-item" onclick="showSection('verifications', this)">
+          <span class="icon">✅</span> Verifications
+        </a>
+        <a href="#" class="nav-item" onclick="showSection('sos', this)">
+          <span class="icon">🆘</span> SOS Alerts
+        </a>
+      </nav>
+      <button class="btn-logout" onclick="logout()">Sign Out</button>
+    </aside>
+
+    <!-- Content Area -->
+    <main class="content">
+      <!-- Dashboard Section -->
+      <section id="section-dashboard" class="section active">
+        <div class="section-header">
+          <h2>Dashboard</h2>
+          <button class="btn-refresh" onclick="loadStats()">↻ Refresh</button>
+        </div>
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card loading">Loading...</div>
+        </div>
+      </section>
+
+      <!-- Users Section -->
+      <section id="section-users" class="section hidden">
+        <div class="section-header">
+          <h2>Users</h2>
+          <button class="btn-refresh" onclick="loadUsers()">↻ Refresh</button>
+        </div>
+        <div class="search-bar">
+          <input type="text" id="user-search" placeholder="Search by name or phone..." oninput="filterUsers()" />
+        </div>
+        <div class="table-container">
+          <table id="users-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Verified</th>
+                <th>Driver</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="7" class="loading-row">Loading users...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Verifications Section -->
+      <section id="section-verifications" class="section hidden">
+        <div class="section-header">
+          <h2>Verifications</h2>
+          <button class="btn-refresh" onclick="loadVerifications()">↻ Refresh</button>
+        </div>
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('identity', this)">Identity</button>
+          <button class="tab" onclick="switchTab('driver', this)">Driver</button>
+        </div>
+        <div id="verifications-list" class="cards-grid">
+          <p class="empty-state">Loading...</p>
+        </div>
+      </section>
+
+      <!-- SOS Section -->
+      <section id="section-sos" class="section hidden">
+        <div class="section-header">
+          <h2>SOS Alerts</h2>
+          <button class="btn-refresh" onclick="loadSos()">↻ Refresh</button>
+        </div>
+        <div class="table-container">
+          <table id="sos-table">
+            <thead>
+              <tr>
+                <th>Alert ID</th>
+                <th>User ID</th>
+                <th>Ride ID</th>
+                <th>Time</th>
+                <th>Location</th>
+              </tr>
+            </thead>
+            <tbody id="sos-tbody">
+              <tr><td colspan="5" class="loading-row">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>

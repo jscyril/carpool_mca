@@ -74,6 +74,7 @@ class _AuthScreenState extends State<AuthScreen> {
   void _onOtpVerified({
     String? phoneVerifiedToken,
     String? accessToken,
+    String? refreshToken,
     Map<String, dynamic>? userData,
   }) async {
     if (_isSignUp && phoneVerifiedToken != null) {
@@ -83,8 +84,11 @@ class _AuthScreenState extends State<AuthScreen> {
       });
       _navigateToStep(AuthStep.personalDetails);
     } else if (accessToken != null) {
-      // Login: OTP verified, we have the access token — go home
-      await ApiService.saveAccessToken(accessToken);
+      // Login: OTP verified, save both tokens
+      await ApiService.saveTokens(
+        accessToken: accessToken,
+        refreshToken: refreshToken ?? '',
+      );
       await AuthService.setLoggedIn(true, phone: _phoneNumber);
       if (userData != null) {
         await AuthService.saveUserProfile(

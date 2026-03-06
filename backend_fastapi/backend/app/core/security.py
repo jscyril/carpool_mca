@@ -1,9 +1,10 @@
 """
 Security utilities for authentication.
 Includes JWT handling and OTP generation (passwordless system).
+Supports refresh token rotation for persistent login.
 """
-import secrets
 import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -35,12 +36,27 @@ def verify_otp(plain_otp: str, hashed_otp: str) -> bool:
 
 
 # =============================================================================
+# REFRESH TOKEN UTILITIES
+# =============================================================================
+
+def generate_refresh_token() -> str:
+    """Generate a cryptographically secure refresh token (URL-safe)."""
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    """SHA256-hash a refresh token for storage."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+# =============================================================================
 # JWT UTILITIES
 # =============================================================================
 
 class TokenType:
     """Token type constants for JWT purpose claims."""
     ACCESS = "access"
+    REFRESH = "refresh"
     PHONE_SESSION = "phone_session"
     PHONE_VERIFIED = "phone_verified"
     EMAIL_SESSION = "email_session"
@@ -54,28 +70,28 @@ def create_token(
 ) -> str:
     """
     Create a JWT token with specified type and expiry.
-    
+
     Args:
         data: Payload data to encode
         token_type: Type of token (access, phone_session, etc.)
         expires_delta: Optional custom expiry duration
-    
+
     Returns:
         Encoded JWT string
     """
     to_encode = data.copy()
-    
+
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-    
+
     to_encode.update({
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": token_type
     })
-    
+
     return jwt.encode(
         to_encode,
         settings.JWT_SECRET_KEY,
@@ -86,11 +102,11 @@ def create_token(
 def decode_token(token: str, expected_type: str | None = None) -> dict[str, Any] | None:
     """
     Decode and validate a JWT token.
-    
+
     Args:
         token: JWT string to decode
         expected_type: If provided, validates the token type matches
-    
+
     Returns:
         Decoded payload or None if invalid
     """
@@ -100,18 +116,18 @@ def decode_token(token: str, expected_type: str | None = None) -> dict[str, Any]
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM]
         )
-        
+
         # Validate token type if specified
         if expected_type and payload.get("type") != expected_type:
             return None
-        
+
         return payload
     except JWTError:
         return None
 
 
 def create_access_token(user_id: str) -> str:
-    """Create an access token for authenticated user."""
+    """Create a short-lived access token for authenticated user (1 hour)."""
     return create_token(
         data={"sub": user_id},
         token_type=TokenType.ACCESS,

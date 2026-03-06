@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, TIMESTAMP
+from sqlalchemy import ForeignKey, TIMESTAMP, Float
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -12,5 +12,5 @@ class FaceData(Base):
         ForeignKey("users.user_id"),
         primary_key=True
     )
-    face_embedding: Mapped[list[float]] = mapped_column(ARRAY(float), nullable=False)
+    face_embedding: Mapped[list[float]] = mapped_column(ARRAY(Float), nullable=False)
     last_verified_at: Mapped[str | None] = mapped_column(TIMESTAMP)

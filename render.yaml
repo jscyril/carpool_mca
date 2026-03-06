@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: uniride-api
+    env: docker
+    dockerfilePath: ./backend_fastapi/Dockerfile
+    dockerContext: ./backend_fastapi
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: smtp
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SMS_PROVIDER
+        value: console
+      - key: OCR_PROVIDER
+        value: console
+      - key: VERIFICATION_PROVIDER
+        value: console

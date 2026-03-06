@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     # JWT
     JWT_SECRET_KEY: str = "your-super-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     
     # OTP Settings
     OTP_LENGTH: int = 6
@@ -35,7 +36,8 @@ class Settings(BaseSettings):
     
     # College Email Pattern (regex)
     # Pattern: *****@***christuniversity.in
-    COLLEGE_EMAIL_PATTERN: str = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*christuniversity\.in$"
+    # Matches @christuniversity.in and @any-subdomain.christuniversity.in
+    COLLEGE_EMAIL_PATTERN: str = r"^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9-]+\.)*christuniversity\.in$"
     
     # SMS Service (MSG91 / Twilio)
     SMS_PROVIDER: str = "console"  # "console" | "msg91" | "twilio"

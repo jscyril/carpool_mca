@@ -66,10 +66,10 @@ class EmailSendOTPRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_college_email(cls, v: str) -> str:
-        # Pattern: *****@***christuniversity.in
-        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*christuniversity\.in$"
+        # Matches @christuniversity.in and @any.subdomain.christuniversity.in
+        pattern = r"^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9-]+\.)*christuniversity\.in$"
         if not re.match(pattern, v.lower()):
-            raise ValueError("Email must be a valid Christ University email (*@*christuniversity.in)")
+            raise ValueError("Email must be a valid Christ University email (@christuniversity.in or @*.christuniversity.in)")
         return v.lower()
 
 
@@ -111,6 +111,7 @@ class RegisterRequest(BaseModel):
 class RegisterResponse(BaseModel):
     """Response after successful registration."""
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: "UserResponse"
 
@@ -165,6 +166,7 @@ class LoginVerifyOTPRequest(BaseModel):
 class LoginResponse(BaseModel):
     """Response after successful login."""
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
 
